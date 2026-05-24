@@ -1,0 +1,60 @@
+{
+  "name": "tangzon-product-manager",
+  "version": "3.1.0",
+  "description": "Tangzon 产品管理桌面版",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder --win --x64",
+    "build:portable": "electron-builder --win portable --x64"
+  },
+  "author": "Tangzon",
+  "devDependencies": {
+    "electron": "^28.0.0",
+    "electron-builder": "^24.9.1"
+  },
+  "dependencies": {
+    "electron-updater": "^6.1.7"
+  },
+  "build": {
+    "appId": "com.tangzon.productmanager",
+    "productName": "Tangzon产品管理",
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "Jw10303311",
+        "repo": "tangzon-app"
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "icon.ico",
+      "artifactName": "Tangzon产品管理-${version}-${arch}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Tangzon产品管理"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "Tangzon_产品管理_个人版本.html",
+      "icon.png",
+      "icon.ico",
+      "node_modules/**/*"
+    ],
+    "directories": {
+      "output": "dist"
+    }
+  }
+}
