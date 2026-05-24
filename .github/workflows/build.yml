@@ -1,20 +1,20 @@
 name: Build and Release
 
-# 当 package.json 版本号变化并推送时，自动打包并发布 Release
+# 触发：手动运行，或 package.json 改动推送时
 on:
   push:
     branches:
       - main
     paths:
       - 'package.json'
-  workflow_dispatch:   # 也允许手动触发
+  workflow_dispatch:
+
+permissions:
+  contents: write   # 允许创建 Release / 上传文件
 
 jobs:
   build:
     runs-on: windows-latest
-
-    permissions:
-      contents: write   # 允许创建 Release
 
     steps:
       - name: 检出代码
@@ -28,8 +28,24 @@ jobs:
       - name: 安装依赖
         run: npm install
 
-      - name: 打包并发布到 GitHub Release
+      - name: 读取版本号
+        id: ver
+        shell: bash
+        run: echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - name: 打包
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
-        run: npx electron-builder --win --x64 --publish always
+        run: npx electron-builder --win --x64 --publish never
+
+      - name: 发布到 Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.ver.outputs.version }}
+          name: v${{ steps.ver.outputs.version }}
+          files: |
+            dist/*.exe
+            dist/latest.yml
+            dist/*.blockmap
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
