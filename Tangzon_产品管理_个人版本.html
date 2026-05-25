@@ -4608,10 +4608,17 @@ setTimeout(function(){
 // 更新日志 (Changelog)
 // 每次发新版，在 CHANGELOG 数组最前面加一条即可。
 // ════════════════════════════════════════════════════════════════
-var APP_VERSION='3.3.0';
+var APP_VERSION='3.3.1';
 // 标题栏自动显示当前版本号（跟随 APP_VERSION，不用手动改）
 try{ document.title = 'Tangzon 产品管理 v' + APP_VERSION; }catch(e){}
 var CHANGELOG=[
+  {
+    v:'3.3.1', date:'2026-05-25',
+    notes:[
+      '修复：自动更新下载时报 404 的问题（安装包文件名含中文导致）',
+      '现在自动更新可以正常下载，不用再手动去 GitHub 下载了'
+    ]
+  },
   {
     v:'3.3.0', date:'2026-05-25',
     notes:[

@@ -1,6 +1,6 @@
 {
   "name": "tangzon-product-manager",
-  "version": "3.3.0",
+  "version": "3.3.1",
   "description": "Tangzon 产品管理桌面版",
   "main": "main.js",
   "scripts": {
@@ -36,7 +36,7 @@
         }
       ],
       "icon": "icon.ico",
-      "artifactName": "Tangzon产品管理-${version}-${arch}.${ext}"
+      "artifactName": "Tangzon-${version}-${arch}.${ext}"
     },
     "nsis": {
       "oneClick": false,
