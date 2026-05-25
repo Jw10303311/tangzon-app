@@ -240,6 +240,7 @@ function buildMenu() {
     { label: '视图', submenu: [ { role: 'zoomIn', label: '放大' }, { role: 'zoomOut', label: '缩小' }, { role: 'resetZoom', label: '默认大小' }, { type: 'separator' }, { role: 'togglefullscreen', label: '全屏切换' }, { type: 'separator' }, { label: '开发者工具', accelerator: 'F12', click: () => { if (mainWindow) mainWindow.webContents.toggleDevTools(); } } ] },
     { label: '帮助', submenu: [
       { label: '检查更新...', click: () => checkForUpdates(false) },
+      { label: '更新日志', click: () => { showMainWindow(); mainWindow.webContents.executeJavaScript(`if(typeof showChangelog==='function')showChangelog();`); } },
       { type: 'separator' },
       { label: '关于', click: async () => {
         await dialog.showMessageBox(mainWindow, { type: 'info', title: '关于', message: 'Tangzon 产品管理 v' + app.getVersion(), detail: '数据存储位置:\n' + getDataDir() + '\n\n版本: ' + app.getVersion() + '\nElectron: ' + process.versions.electron + '\nChromium: ' + process.versions.chrome });

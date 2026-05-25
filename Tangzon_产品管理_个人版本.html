@@ -763,6 +763,9 @@ body.dark .cpal{background:rgba(0,0,0,.7);}
   <div style="margin-top:14px;padding:10px;background:var(--accent-bg);border-radius:7px;font-size:11px;color:var(--tx2);line-height:1.6">
     💡 <b>提示</b>：拖放 .json/.xlsx/.csv 文件到窗口可直接导入。拖图片到产品卡（管理模式下）会替换该产品图片。
   </div>
+  <div style="margin-top:10px;text-align:center">
+    <button onclick="showChangelog()" style="background:transparent;border:0;color:var(--accent);font-size:11.5px;cursor:pointer;text-decoration:underline;font-family:inherit">查看更新日志</button>
+  </div>
   <div class="fa">
     <button class="btn-ok" onclick="saveAppSettings()">完成</button>
   </div>
@@ -829,6 +832,17 @@ body.dark .cpal{background:rgba(0,0,0,.7);}
   <div class="fa">
     <button class="btn-c" onclick="closeMo('mo-bulk-subtype')">取消</button>
     <button class="btn-ok" onclick="confirmBulkSubtype()">应用</button>
+  </div>
+</div></div>
+
+<!-- Changelog / 更新日志 modal -->
+<div class="mo" id="mo-changelog"><div class="md" style="width:480px;max-height:78vh;display:flex;flex-direction:column">
+  <button class="md-x" onclick="closeMo('mo-changelog')">✕</button>
+  <div class="md-title" id="changelog-title">更新日志</div>
+  <div class="md-sub" id="changelog-sub">查看每个版本的更新内容</div>
+  <div id="changelog-body" style="overflow-y:auto;margin-top:8px;padding-right:4px;flex:1"></div>
+  <div class="fa">
+    <button class="btn-ok" onclick="closeMo('mo-changelog')">知道了</button>
   </div>
 </div></div>
 
@@ -4580,6 +4594,90 @@ setTimeout(function(){
   if(_isElectronEnv())startRatingTrickle();
 },30000);
 
+
+// ════════════════════════════════════════════════════════════════
+// 更新日志 (Changelog)
+// 每次发新版，在 CHANGELOG 数组最前面加一条即可。
+// ════════════════════════════════════════════════════════════════
+var APP_VERSION='3.2.0';
+var CHANGELOG=[
+  {
+    v:'3.2.0', date:'2026-05-25',
+    notes:[
+      '新增：新货号也能被搜索到（之前只能搜老货号）',
+      '新增：勾选产品后可一键批量设置细分类型',
+      '新增：有主图时也能二次手动抓图（带确认，防误覆盖）',
+      '新增：勾选多个产品可一起拖动排序（方便变体调位）',
+      '新增：后台自动更新星级/评论数（实验性，需在设置开启）',
+      '新增：应用内更新日志（就是你正在看的这个）',
+      '修复：编辑产品卡数据后细分类型丢失的问题',
+      '修复：底部状态栏遮挡产品卡；撤销栏 20 秒后自动消失',
+      '修复：「检查更新」点击无反应的问题'
+    ]
+  },
+  {
+    v:'3.1.0', date:'2026-05-24',
+    notes:[
+      '首个支持 GitHub 自动更新的版本',
+      '以后新版本会自动检测并提示下载'
+    ]
+  }
+];
+
+function renderChangelog(){
+  var body=q('changelog-body');
+  if(!body)return;
+  body.innerHTML=CHANGELOG.map(function(entry,i){
+    var isLatest=(i===0);
+    var rows=entry.notes.map(function(n){
+      // Color-code by prefix
+      var color='var(--tx2)';
+      if(n.indexOf('新增')===0)color='var(--green)';
+      else if(n.indexOf('修复')===0)color='var(--accent)';
+      else if(n.indexOf('优化')===0)color='var(--blue)';
+      return '<div style="display:flex;gap:7px;margin-bottom:5px;font-size:12px;line-height:1.55">'
+        +'<span style="color:'+color+';flex-shrink:0">•</span>'
+        +'<span style="color:var(--tx2)">'+esc(n)+'</span>'
+        +'</div>';
+    }).join('');
+    return '<div style="margin-bottom:18px;padding-bottom:16px;'+(i<CHANGELOG.length-1?'border-bottom:1px solid var(--bor-soft)':'')+'">'
+      +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">'
+        +'<span style="font-family:\'JetBrains Mono\',monospace;font-size:14px;font-weight:700;color:var(--tx)">v'+esc(entry.v)+'</span>'
+        +(isLatest?'<span style="font-size:9px;font-weight:700;background:var(--green-bg);color:var(--green);border:1px solid var(--green-bor);padding:1px 7px;border-radius:99px">最新</span>':'')
+        +'<span style="font-size:10.5px;color:var(--tx3);margin-left:auto;font-family:\'JetBrains Mono\',monospace">'+esc(entry.date)+'</span>'
+      +'</div>'
+      +rows
+      +'</div>';
+  }).join('');
+}
+
+function showChangelog(){
+  renderChangelog();
+  var t=q('changelog-title'),s=q('changelog-sub');
+  if(t)t.textContent='更新日志';
+  if(s)s.textContent='当前版本 v'+APP_VERSION;
+  openMo('mo-changelog');
+}
+
+// 升级后首次打开，自动弹一次"本次更新内容"
+function checkChangelogOnUpdate(){
+  try{
+    var seen=localStorage.getItem('tz3_last_seen_version');
+    if(seen!==APP_VERSION){
+      // 版本变了 — 自动展示更新日志
+      localStorage.setItem('tz3_last_seen_version',APP_VERSION);
+      if(seen){  // 不是首次安装，是"升级" — 才弹
+        renderChangelog();
+        var t=q('changelog-title'),s=q('changelog-sub');
+        if(t)t.textContent='已更新到 v'+APP_VERSION;
+        if(s)s.textContent='本次更新内容如下';
+        setTimeout(function(){openMo('mo-changelog');},1200);
+      }
+    }
+  }catch(e){}
+}
+setTimeout(checkChangelogOnUpdate,1500);
+
 function updateStatusBar(){
   try{
     var total=0;
@@ -4665,6 +4763,7 @@ function renderCmdPalette(qStr){
     {sec:'操作',label:'批量抓取主图',hint:'',ico:'image',fn:function(){if(typeof batchAutoFetchImgs==='function')batchAutoFetchImgs();}},
     {sec:'操作',label:'新建活动',hint:'',ico:'plus',fn:function(){if(typeof openCreatePromo==='function'){switchTab('promo');setTimeout(openCreatePromo,200);}}},
     {sec:'外观',label:'切换 深色/浅色 模式',hint:'',ico:'sun',fn:toggleDarkMode},
+    {sec:'其他',label:'查看更新日志',hint:'',ico:'box',fn:function(){if(typeof showChangelog==='function')showChangelog();}},
     {sec:'外观',label:'卡片密度 紧凑',hint:'',ico:'grid',fn:function(){setDensity('compact');}},
     {sec:'外观',label:'卡片密度 默认',hint:'',ico:'grid',fn:function(){setDensity('default');}},
     {sec:'外观',label:'卡片密度 详细',hint:'',ico:'grid',fn:function(){setDensity('detailed');}}
