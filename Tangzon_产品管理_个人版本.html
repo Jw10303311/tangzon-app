@@ -79,7 +79,7 @@ a{color:inherit;text-decoration:none;}
 /* LAYOUT ──────────────────────────────────────────────── */
 .layout{display:flex;margin-top:var(--hd);min-height:calc(100vh - var(--hd));}
 .sidebar{width:var(--sb);flex-shrink:0;position:fixed;top:var(--hd);bottom:0;left:0;background:var(--sur);border-right:1px solid var(--bor);display:flex;flex-direction:column;z-index:200;}
-.main{margin-left:var(--sb);flex:1;padding:24px 26px;padding-bottom:80px;min-width:0;}
+.main{margin-left:var(--sb);flex:1;padding:24px 26px;padding-bottom:110px;min-width:0;}
 
 /* SIDEBAR ─────────────────────────────────────────────── */
 .sb-actbar{display:flex;align-items:center;gap:6px;padding:11px 12px 10px;border-bottom:1px solid var(--bor);background:var(--sur);flex-shrink:0;flex-wrap:wrap;}
@@ -437,7 +437,7 @@ body.density-detailed .p-price{font-size:15px;}
 .statusbar-item.right{margin-left:auto;}
 .statusbar-dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--green);box-shadow:0 0 6px var(--green);}
 .statusbar-dot.idle{background:var(--tx4);box-shadow:none;}
-.main{padding-bottom:46px!important;}
+.main{padding-bottom:96px!important;}
 .sbanner{bottom:30px!important;}
 
 /* ── SKELETON LOADERS ────────────────────────────────── */
@@ -572,15 +572,16 @@ body.dark .cpal{background:rgba(0,0,0,.7);}
         </div>
       </div>
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
-        <div class="c-search" style="flex:1"><span class="c-si">🔍</span><input id="c-search-input" type="text" placeholder="搜索 ASIN / SKU…" oninput="scheduleRender()"></div>
+        <div class="c-search" style="flex:1"><span class="c-si">🔍</span><input id="c-search-input" type="text" placeholder="搜索 ASIN / 新旧货号…" oninput="scheduleRender()"></div>
         <div id="st-bar-container"></div>
         <button onclick="openReviewPanel()" class="btn-c" style="font-size:10px;padding:4px 12px;white-space:nowrap;display:flex;align-items:center;gap:4px">📝 Review 更新</button>
       </div>
       <div id="review-panel" style="display:none;background:var(--sur);border:1px solid var(--bor);border-radius:8px;margin-bottom:10px;max-height:400px;overflow-y:auto"></div>
       <div id="sel-bar" style="display:none;align-items:center;gap:10px;padding:8px 12px;background:rgba(35,85,212,.07);border-radius:6px;margin-bottom:8px;border:1px solid rgba(35,85,212,.18)">
         <span style="font-size:11px;color:var(--blue);font-weight:600" id="sel-bar-count">已选 0 个</span>
-        <button class="btn-c" onclick="retireSelected()" style="font-size:10px;color:var(--red);border-color:#fca5a5">🗑 批量淘汰</button>
-        <button class="btn-c" onclick="clearSelection()" style="font-size:10px">✕ 取消</button>
+        <button class="btn-c" onclick="openBulkSubtype()" style="font-size:10px;color:var(--accent);border-color:var(--accent-bor)">设置细分类型</button>
+        <button class="btn-c" onclick="retireSelected()" style="font-size:10px;color:var(--red);border-color:#fca5a5">批量淘汰</button>
+        <button class="btn-c" onclick="clearSelection()" style="font-size:10px">取消</button>
       </div>
       <div id="prod-owner-panel" style="display:none;padding:0 0 12px 0"></div>
       <div class="pg" id="prod-grid"></div>
@@ -752,6 +753,13 @@ body.dark .cpal{background:rgba(0,0,0,.7);}
       <div style="font-size:11px;color:var(--tx3);margin-top:2px">超过 7 天未备份时桌面通知 + 应用内提醒</div>
     </label>
   </div>
+  <div class="fg" style="display:flex;align-items:center;gap:10px;padding:12px;background:var(--sur2);border-radius:8px;margin-top:8px">
+    <input type="checkbox" id="set-auto-rating" style="width:16px;height:16px;cursor:pointer">
+    <label for="set-auto-rating" style="flex:1;cursor:pointer;font-size:13px">
+      <div style="font-weight:600;color:var(--tx)">自动更新星级 / 评论数（实验性）</div>
+      <div style="font-size:11px;color:var(--tx3);margin-top:2px">后台每天慢速抓取约 50 个产品的星级和评论数，约 2 周轮完一遍。成功率受 Amazon 反爬影响，抓不到的会自动重试。</div>
+    </label>
+  </div>
   <div style="margin-top:14px;padding:10px;background:var(--accent-bg);border-radius:7px;font-size:11px;color:var(--tx2);line-height:1.6">
     💡 <b>提示</b>：拖放 .json/.xlsx/.csv 文件到窗口可直接导入。拖图片到产品卡（管理模式下）会替换该产品图片。
   </div>
@@ -776,7 +784,8 @@ body.dark .cpal{background:rgba(0,0,0,.7);}
   <div class="statusbar-item"><b id="sb-products">0</b>产品</div>
   <div class="statusbar-item"><b id="sb-starred">0</b>关注</div>
   <div class="statusbar-item"><b id="sb-promos">0</b>活动</div>
-  <div class="statusbar-item right" id="sb-backup">从未备份</div>
+  <div class="statusbar-item right" id="sb-rating-progress" style="display:none;color:var(--accent)"></div>
+  <div class="statusbar-item" id="sb-backup">从未备份</div>
   <div class="statusbar-item"><span id="sb-time"></span></div>
 </div>
 
@@ -802,6 +811,24 @@ body.dark .cpal{background:rgba(0,0,0,.7);}
   <div class="fa">
     <button class="btn-c" onclick="closeMo('mo-input')">取消</button>
     <button class="btn-ok" onclick="_inputModalConfirm()">确认</button>
+  </div>
+</div></div>
+
+<!-- Bulk set subtype modal -->
+<div class="mo" id="mo-bulk-subtype"><div class="md" style="width:400px">
+  <button class="md-x" onclick="closeMo('mo-bulk-subtype')">✕</button>
+  <div class="md-title">批量设置细分类型</div>
+  <div class="md-sub" id="bulk-subtype-sub">将所选产品统一设置为某个细分类型</div>
+  <div class="fg" style="margin-top:8px">
+    <label class="fl">选择细分类型</label>
+    <select class="fsel" id="bulk-subtype-sel"></select>
+  </div>
+  <div style="margin-top:8px;padding:9px 11px;background:var(--accent-bg);border-radius:6px;font-size:11px;color:var(--tx2);line-height:1.6">
+    提示：所选产品必须属于同一个小类，才能批量设置该小类下的细分类型。
+  </div>
+  <div class="fa">
+    <button class="btn-c" onclick="closeMo('mo-bulk-subtype')">取消</button>
+    <button class="btn-ok" onclick="confirmBulkSubtype()">应用</button>
   </div>
 </div></div>
 
@@ -1115,6 +1142,58 @@ function setActiveSubtype(name){
   buildSubtypeBar();
   scheduleRender();
 }
+
+// ── REQ2: 批量设置细分类型 ──────────────────────────────────────
+function openBulkSubtype(){
+  if(!_selAsins.size){toast('请先勾选产品');return;}
+  // Determine which subcategory the selected products belong to
+  var asins=Array.from(_selAsins);
+  var cats=new Set(),subs=new Set();
+  asins.forEach(function(a){
+    var loc=findItem(a);
+    if(loc.cat){cats.add(loc.cat);subs.add(loc.cat+'|'+loc.sub);}
+  });
+  if(subs.size===0){toast('未找到所选产品');return;}
+  if(subs.size>1){
+    toast('所选产品跨越多个小类，无法批量设置。请只选同一小类下的产品。');
+    return;
+  }
+  var ck=Array.from(subs)[0];
+  var parts=ck.split('|'),bcat=parts[0],bsub=parts[1];
+  var types=getSubtypes(bcat,bsub);
+  if(!types.length){
+    toast('小类「'+bsub+'」还没有细分类型，请先在该小类下添加细分类型');
+    return;
+  }
+  var sel=q('bulk-subtype-sel');
+  sel.innerHTML='<option value="">— 无类型（清除）—</option>'
+    +types.map(function(t){return '<option value="'+esc(t)+'">'+esc(t)+'</option>';}).join('');
+  q('bulk-subtype-sub').textContent='将所选 '+_selAsins.size+' 个产品（'+bcat+' › '+bsub+'）统一设置细分类型';
+  // Stash context
+  q('mo-bulk-subtype').dataset.cat=bcat;
+  q('mo-bulk-subtype').dataset.sub=bsub;
+  openMo('mo-bulk-subtype');
+}
+function confirmBulkSubtype(){
+  var newType=q('bulk-subtype-sel').value;
+  var asins=Array.from(_selAsins);
+  var n=0;
+  asins.forEach(function(a){
+    var loc=findItem(a);
+    if(!loc.cat)return;
+    var it=DATA[loc.cat][loc.sub][loc.idx];
+    if(!it)return;
+    if(newType===''){delete it.subtype;}
+    else{it.subtype=newType;}
+    n++;
+  });
+  closeMo('mo-bulk-subtype');
+  markDirty();save();
+  if(typeof buildSubtypeBar==='function')buildSubtypeBar();
+  renderGrid();
+  toast('✓ 已为 '+n+' 个产品设置细分类型'+(newType?'：'+newType:'（已清除）'));
+}
+
 function buildSubtypeBar(){
   var c=document.getElementById('st-bar-container');if(!c)return;
   // Only show on a specific sub view (not 全部 / not cat-only)
@@ -1427,8 +1506,10 @@ function updateBatchImgBadge(){
 function autoFetchImg(){
   var asin=q('inp-asin').value.trim().toUpperCase();
   if(!/^[A-Z0-9]{10,12}$/.test(asin)){toast('请先填入正确的 ASIN');return;}
-  // Skip if image already exists — no re-fetching
-  if(pendImg){toast('ℹ 已有图片，不再重复抓取');return;}
+  // REQ4: if image already exists, ask for confirmation before re-fetching
+  if(pendImg){
+    if(!confirm('该产品已有主图。\n确定要重新抓取并覆盖现有图片吗？'))return;
+  }
   _warnIfFileProtocol();
   toast('🔍 正在抓取 '+asin+' 的主图…');
   var btn=event.target;
@@ -2153,9 +2234,20 @@ function snapshotForUndo(){
   _undoStack.push({D:JSON.stringify(DATA),R:JSON.stringify(RETIRED),S:JSON.stringify(STARRED)});
   if(_undoStack.length>20)_undoStack.shift();
 }
+var _sbannerTimer=null;
 function markDirty(){
-  dirty=true;q('sbanner').classList.add('on');
-  pruneEmpty();  // auto-remove empty cats/subs
+  dirty=true;
+  var sb=q('sbanner');
+  if(sb){
+    sb.classList.add('on');
+    // REQ6b: auto-hide the undo banner after 20 seconds
+    if(_sbannerTimer)clearTimeout(_sbannerTimer);
+    _sbannerTimer=setTimeout(function(){
+      var b=q('sbanner');
+      if(b)b.classList.remove('on');
+    },20000);
+  }
+  pruneEmpty();
   save();
 }
 function pruneEmpty(){
@@ -2515,25 +2607,36 @@ function renderGrid(){
 }
 
 var _dragSrcAsin=null;
+var _dragGroup=[];  // REQ5: list of asins being dragged together
 function initCardDrag(grid){
-  // Use event delegation on the grid to avoid child-element interference
   grid.addEventListener('dragstart',function(e){
     var card=e.target.closest('.pc[data-drag-asin]');
     if(!card)return;
     _dragSrcAsin=card.getAttribute('data-asin');
+    // REQ5: if the dragged card is part of a multi-selection, drag the whole group
+    if(_selAsins&&_selAsins.size>1&&_selAsins.has(_dragSrcAsin)){
+      _dragGroup=Array.from(_selAsins);
+    } else {
+      _dragGroup=[_dragSrcAsin];
+    }
     e.dataTransfer.effectAllowed='move';
     e.dataTransfer.setData('text/plain',_dragSrcAsin);
-    setTimeout(function(){card.style.opacity='0.45';},0);
+    // Fade all cards in the group
+    setTimeout(function(){
+      _dragGroup.forEach(function(a){
+        var c=grid.querySelector('.pc[data-asin="'+a+'"]');
+        if(c)c.style.opacity='0.4';
+      });
+    },0);
   });
   grid.addEventListener('dragend',function(e){
-    var card=e.target.closest('.pc[data-drag-asin]');
-    if(card)card.style.opacity='';
+    grid.querySelectorAll('.pc').forEach(function(c){c.style.opacity='';});
   });
   grid.addEventListener('dragover',function(e){
     e.preventDefault();
     var card=e.target.closest('.pc[data-drag-asin]');
     grid.querySelectorAll('.pc').forEach(function(c){c.style.outline='';});
-    if(card&&card.getAttribute('data-asin')!==_dragSrcAsin)
+    if(card&&_dragGroup.indexOf(card.getAttribute('data-asin'))<0)
       card.style.outline='2px solid var(--blue)';
   });
   grid.addEventListener('dragleave',function(e){
@@ -2544,17 +2647,33 @@ function initCardDrag(grid){
     e.preventDefault();
     grid.querySelectorAll('.pc').forEach(function(c){c.style.outline='';c.style.opacity='';});
     var card=e.target.closest('.pc[data-drag-asin]');
-    if(!card)return;
+    if(!card){_dragSrcAsin=null;_dragGroup=[];return;}
     var targetAsin=card.getAttribute('data-asin');
-    if(!_dragSrcAsin||_dragSrcAsin===targetAsin)return;
+    if(!_dragSrcAsin||_dragGroup.indexOf(targetAsin)>=0){
+      // Dropped onto itself or onto a member of the dragged group — no-op
+      _dragSrcAsin=null;_dragGroup=[];return;
+    }
     var arr=DATA[actMain][actSub];
-    var si=arr.findIndex(function(it){return it.asin===_dragSrcAsin;});
-    var ti=arr.findIndex(function(it){return it.asin===targetAsin;});
-    if(si<0||ti<0)return;
-    var moved=arr.splice(si,1)[0];
-    arr.splice(ti,0,moved);
-    _dragSrcAsin=null;
+    // REQ5: pull out ALL items in the drag group (preserving their relative order)
+    var groupSet={};
+    _dragGroup.forEach(function(a){groupSet[a]=true;});
+    var movedItems=[];
+    var remaining=[];
+    arr.forEach(function(it){
+      if(groupSet[it.asin])movedItems.push(it);
+      else remaining.push(it);
+    });
+    if(!movedItems.length){_dragSrcAsin=null;_dragGroup=[];return;}
+    // Find insertion index in the remaining array (before the target card)
+    var ti=remaining.findIndex(function(it){return it.asin===targetAsin;});
+    if(ti<0)ti=remaining.length;
+    // Insert the moved block at ti
+    var result=remaining.slice(0,ti).concat(movedItems,remaining.slice(ti));
+    DATA[actMain][actSub]=result;
+    var movedCount=movedItems.length;
+    _dragSrcAsin=null;_dragGroup=[];
     markDirty();renderGrid();
+    if(movedCount>1)toast('✓ 已移动 '+movedCount+' 个产品');
   });
 }
 
@@ -2589,7 +2708,7 @@ function getItems(){
     });
   }
   var qv=(q('c-search-input')||{value:''}).value.trim().toLowerCase();
-  if(qv)items=items.filter(function(it){return it.asin.toLowerCase().includes(qv)||(it.sku&&it.sku.toLowerCase().includes(qv));});
+  if(qv)items=items.filter(function(it){return it.asin.toLowerCase().includes(qv)||(it.sku&&it.sku.toLowerCase().includes(qv))||(it.new_sku&&it.new_sku.toLowerCase().includes(qv));});
   // Grade filter
   if(_filterGrade)items=items.filter(function(it){return it.grade===_filterGrade;});
   if(filterStarChanged)items=items.filter(function(it){return hasReviewChange(it.asin);});
@@ -2987,9 +3106,28 @@ function fillSubSel(id,cat,sel){var el=q(id);el.innerHTML='';if(DATA[cat])Object
 function syncSubSel(catId,subId){fillSubSel(subId,q(catId).value,null);}
 function openAddProd(){q('inp-comp-asins').value='';q('md-prod-title').textContent='添加产品';q('md-prod-sub').textContent='';['inp-asin','inp-sku','inp-new-sku','inp-price','inp-star','inp-ratings','inp-sales'].forEach(function(id){q(id).value='';});q('md-img-pre').style.display='none';q('md-img-ph').style.display='';q('inp-img').value='';pendImg=null;q('inp-prod-eid').value='';q('inp-prod-ecat').value='';q('inp-prod-esub').value='';q('prod-ok-btn').textContent='确认添加';var dc=actMain!=='__all__'?actMain:Object.keys(DATA)[0];fillCatSel('inp-prod-cat',dc);fillSubSel('inp-prod-subcat',dc,actSub!=='__all__'?actSub:null);openMo('mo-prod');}
 function openEditProd(asin){var loc=findItem(asin);if(!loc.cat)return;var item=DATA[loc.cat][loc.sub][loc.idx];q('md-prod-title').textContent='编辑产品';q('md-prod-sub').textContent=asin;q('inp-asin').value=asin;q('inp-sku').value=item.sku||'';q('inp-new-sku').value=item.new_sku||'';q('inp-price').value=item.price||'';q('inp-star').value=item.star||'';q('inp-ratings').value=item.ratings||'';q('inp-sales').value=item.sales||'';q('inp-prod-eid').value=asin;q('inp-comp-asins').value=(item.comp_asins||[]).join(', ');q('inp-prod-ecat').value=loc.cat;q('inp-prod-esub').value=loc.sub;q('prod-ok-btn').textContent='保存修改';pendImg=item.img||getImg(asin)||null;var pre=q('md-img-pre');if(pendImg){pre.src=pendImg;pre.style.display='';q('md-img-ph').style.display='none';}else{pre.style.display='none';q('md-img-ph').style.display='';}fillCatSel('inp-prod-cat',loc.cat);fillSubSel('inp-prod-subcat',loc.cat,loc.sub);openMo('mo-prod');}
-function confirmProd(){var asin=q('inp-asin').value.trim().toUpperCase();if(!asin||asin.length<10){toast('请输入有效 ASIN');return;}var cat=q('inp-prod-cat').value,sub=q('inp-prod-subcat').value;if(!DATA[cat]||!DATA[cat][sub]){toast('请选择有效类目');return;}var eid=q('inp-prod-eid').value,ecat=q('inp-prod-ecat').value,esub=q('inp-prod-esub').value;var _oldIdx=-1;if(eid){if(ecat&&esub&&DATA[ecat]&&DATA[ecat][esub]){_oldIdx=(ecat===cat&&esub===sub)?DATA[ecat][esub].findIndex(function(it){return it.asin===eid;}):DATA[ecat][esub].findIndex(function(it){return it.asin===eid;});if(ecat===cat&&esub===sub)DATA[ecat][esub].splice(_oldIdx,1);else DATA[ecat][esub]=DATA[ecat][esub].filter(function(it){return it.asin!==eid;});}}else{if(subItems(cat,sub).some(function(it){return it.asin===asin;})){toast('该 ASIN 已存在');return;}}var rawComp=q('inp-comp-asins').value.trim();
+function confirmProd(){var asin=q('inp-asin').value.trim().toUpperCase();if(!asin||asin.length<10){toast('请输入有效 ASIN');return;}var cat=q('inp-prod-cat').value,sub=q('inp-prod-subcat').value;if(!DATA[cat]||!DATA[cat][sub]){toast('请选择有效类目');return;}var eid=q('inp-prod-eid').value,ecat=q('inp-prod-ecat').value,esub=q('inp-prod-esub').value;var _oldIdx=-1;
+  // FIX: capture fields not in the edit form BEFORE the old item is removed
+  var _preserved={};
+  if(eid){
+    var _pl=findItem(eid);
+    if(_pl.cat){
+      var _pi=DATA[_pl.cat][_pl.sub][_pl.idx];
+      if(_pi){
+        if(_pi.subtype)_preserved.subtype=_pi.subtype;
+        if(_pi.ratingFetchedAt)_preserved.ratingFetchedAt=_pi.ratingFetchedAt;
+        if(_pi._retiredFrom)_preserved._retiredFrom=_pi._retiredFrom;
+      }
+    }
+  }
+  if(eid){if(ecat&&esub&&DATA[ecat]&&DATA[ecat][esub]){_oldIdx=(ecat===cat&&esub===sub)?DATA[ecat][esub].findIndex(function(it){return it.asin===eid;}):DATA[ecat][esub].findIndex(function(it){return it.asin===eid;});if(ecat===cat&&esub===sub)DATA[ecat][esub].splice(_oldIdx,1);else DATA[ecat][esub]=DATA[ecat][esub].filter(function(it){return it.asin!==eid;});}}else{if(subItems(cat,sub).some(function(it){return it.asin===asin;})){toast('该 ASIN 已存在');return;}}var rawComp=q('inp-comp-asins').value.trim();
   var compArr=rawComp?rawComp.split(/[,\s]+/).map(function(s){return s.trim().toUpperCase();}).filter(function(s){return s.length>=10;}).slice(0,10):[];
-  var item={asin:asin,sku:q('inp-sku').value.trim()||null,new_sku:q('inp-new-sku').value.trim()||null,price:parseFloat(q('inp-price').value)||null,star:parseFloat(q('inp-star').value)||null,ratings:parseInt(q('inp-ratings').value)||null,sales:parseInt(q('inp-sales').value)||null,subcat:sub,comp_asins:compArr.length?compArr:null};if(pendImg){if(typeof IMGS!=='undefined')IMGS[asin]=pendImg;}snapshotForUndo();if(eid&&ecat===cat&&esub===sub&&_oldIdx>=0){DATA[cat][sub].splice(_oldIdx,0,item);}else{DATA[cat][sub].push(item);}closeMo('mo-prod');markDirty();buildSidebar();renderGrid();updateStats();toast((eid?'✓ 已保存':'✓ 已添加')+' '+asin);}
+  var item={asin:asin,sku:q('inp-sku').value.trim()||null,new_sku:q('inp-new-sku').value.trim()||null,price:parseFloat(q('inp-price').value)||null,star:parseFloat(q('inp-star').value)||null,ratings:parseInt(q('inp-ratings').value)||null,sales:parseInt(q('inp-sales').value)||null,subcat:sub,comp_asins:compArr.length?compArr:null};
+  // Re-apply preserved fields
+  if(_preserved.subtype)item.subtype=_preserved.subtype;
+  if(_preserved.ratingFetchedAt)item.ratingFetchedAt=_preserved.ratingFetchedAt;
+  if(_preserved._retiredFrom)item._retiredFrom=_preserved._retiredFrom;
+  if(pendImg){if(typeof IMGS!=='undefined')IMGS[asin]=pendImg;}snapshotForUndo();if(eid&&ecat===cat&&esub===sub&&_oldIdx>=0){DATA[cat][sub].splice(_oldIdx,0,item);}else{DATA[cat][sub].push(item);}closeMo('mo-prod');markDirty();buildSidebar();renderGrid();updateStats();toast((eid?'✓ 已保存':'✓ 已添加')+' '+asin);}
 function removeProd(asin){
   if(!editMode)return;if(!confirm('确认移除 '+asin+'？'))return;var loc=findItem(asin);if(!loc.cat)return;snapshotForUndo();DATA[loc.cat][loc.sub].splice(loc.idx,1);delete STARRED[asin];markDirty();buildSidebar();renderGrid();updateStats();toast('已移除 '+asin);}
 function compressImage(dataUrl, opts, cb){
@@ -3926,7 +4064,7 @@ function renderRetired(){
   if(_retFilter.cat)items=items.filter(function(it){return it._retiredFrom===_retFilter.cat;});
   if(_retFilter.asin){
     var aq=_retFilter.asin.trim().toLowerCase();
-    items=items.filter(function(it){return it.asin.toLowerCase().includes(aq)||(it.sku&&it.sku.toLowerCase().includes(aq))||(it._retiredFrom&&it._retiredFrom.toLowerCase().includes(aq));});
+    items=items.filter(function(it){return it.asin.toLowerCase().includes(aq)||(it.sku&&it.sku.toLowerCase().includes(aq))||(it.new_sku&&it.new_sku.toLowerCase().includes(aq))||(it._retiredFrom&&it._retiredFrom.toLowerCase().includes(aq));});
   }
   if(_retFilter.salesSort==='desc')items.sort(function(a,b){return(SALES_BASE[b.asin]||0)-(SALES_BASE[a.asin]||0);});
   else if(_retFilter.salesSort==='asc')items.sort(function(a,b){return(SALES_BASE[a.asin]||0)-(SALES_BASE[b.asin]||0);});
@@ -4018,10 +4156,12 @@ function _applyImgs(){
       var m=document.getElementById('set-min-tray');
       var ne=document.getElementById('set-notify-expiring');
       var nb=document.getElementById('set-notify-backup');
+      var ar=document.getElementById('set-auto-rating');
       if(a)a.checked=!!s.autoStart;
       if(m)m.checked=!!s.minToTray;
       if(ne)ne.checked=!!s.notifyExpiring;
       if(nb)nb.checked=!!s.notifyBackup;
+      if(ar)ar.checked=!!s.autoRating;
     });
   }
   var origOpenMo=window.openMo;
@@ -4035,11 +4175,17 @@ function _applyImgs(){
       autoStart:document.getElementById('set-autostart').checked,
       minToTray:document.getElementById('set-min-tray').checked,
       notifyExpiring:document.getElementById('set-notify-expiring').checked,
-      notifyBackup:document.getElementById('set-notify-backup').checked
+      notifyBackup:document.getElementById('set-notify-backup').checked,
+      autoRating:document.getElementById('set-auto-rating')?document.getElementById('set-auto-rating').checked:false
     };
+    var wasAutoRating=updates.autoRating;
     window.electronAPI.saveSettings(updates).then(function(){
       toast('✓ 设置已保存');
       closeMo('mo-app-settings');
+      // If user just enabled auto-rating, kick off the trickle now
+      if(wasAutoRating&&typeof startRatingTrickle==='function'){
+        setTimeout(startRatingTrickle,1500);
+      }
     });
   };
 
@@ -4248,6 +4394,192 @@ function toggleDarkMode(){
 })();
 
 // ── Status bar updater ──────────────────────────────────────────
+
+// ════════════════════════════════════════════════════════════════
+// REQ7: 后台慢速抓取星级 / 评论数（实验性）
+// 每天约 50 个，挑"最久没更新"的产品优先，间隔 25 秒。
+// 仅在 Electron 桌面版且用户在设置里开启时运行。
+// ════════════════════════════════════════════════════════════════
+var _ratingJob={running:false,doneToday:0,quota:50,cancelled:false};
+
+function _ratingStateKey(){return 'tz3_rating_state';}
+function _loadRatingState(){
+  try{
+    var s=JSON.parse(localStorage.getItem(_ratingStateKey())||'{}');
+    var today=new Date().toISOString().slice(0,10);
+    if(s.date!==today){s={date:today,doneToday:0};}
+    return s;
+  }catch(e){return {date:new Date().toISOString().slice(0,10),doneToday:0};}
+}
+function _saveRatingState(s){
+  try{localStorage.setItem(_ratingStateKey(),JSON.stringify(s));}catch(e){}
+}
+
+// Parse star rating + review count from an Amazon product page HTML
+function _extractRatingFromHtml(htmlText){
+  if(!htmlText||htmlText.length<2000)return null;
+  if(/Robot Check|api-services-support@amazon/i.test(htmlText))return {error:'robot_check'};
+  var result={};
+  // Star rating patterns
+  var starPats=[
+    /<span[^>]*class=["'][^"']*a-icon-alt[^"']*["'][^>]*>([0-9.]+)\s*out of 5/i,
+    /data-hook=["']rating-out-of-text["'][^>]*>([0-9.]+)\s*out of 5/i,
+    /([0-9.]+)\s*out of 5 stars/i,
+    /"ratingValue"\s*:\s*"?([0-9.]+)"?/i
+  ];
+  for(var i=0;i<starPats.length;i++){
+    var m=htmlText.match(starPats[i]);
+    if(m&&m[1]){var v=parseFloat(m[1]);if(v>0&&v<=5){result.star=v;break;}}
+  }
+  // Review count patterns
+  var revPats=[
+    /id=["']acrCustomerReviewText["'][^>]*>([0-9,]+)\s*(ratings|reviews|global ratings)/i,
+    /data-hook=["']total-review-count["'][^>]*>([0-9,]+)/i,
+    /([0-9,]+)\s*global ratings/i,
+    /"reviewCount"\s*:\s*"?([0-9,]+)"?/i
+  ];
+  for(var j=0;j<revPats.length;j++){
+    var rm=htmlText.match(revPats[j]);
+    if(rm&&rm[1]){var rv=parseInt(rm[1].replace(/,/g,''));if(rv>=0){result.ratings=rv;break;}}
+  }
+  if(result.star!==undefined||result.ratings!==undefined)return result;
+  return null;
+}
+
+// Fetch rating for ONE asin (Electron direct fetch across regions)
+function fetchAmazonRating(asin){
+  if(!_isElectronEnv())return Promise.resolve(null);
+  asin=asin.trim().toUpperCase();
+  if(!/^[A-Z0-9]{10,12}$/.test(asin))return Promise.resolve(null);
+  var domains=['amazon.co.uk','amazon.com','amazon.de'];
+  var di=0;
+  function tryNext(){
+    if(di>=domains.length)return Promise.resolve(null);
+    var d=domains[di++];
+    var url='https://www.'+d+'/dp/'+asin;
+    return fetch(url,{
+      method:'GET',
+      headers:{
+        'Accept':'text/html,*/*',
+        'Accept-Language':'en-US,en;q=0.9',
+        'User-Agent':'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+      }
+    }).then(function(r){return r.ok?r.text():null;}).then(function(t){
+      if(!t)return tryNext();
+      var res=_extractRatingFromHtml(t);
+      if(res&&res.error==='robot_check')return tryNext();
+      if(res&&(res.star!==undefined||res.ratings!==undefined))return res;
+      return tryNext();
+    }).catch(function(){return tryNext();});
+  }
+  return tryNext();
+}
+
+// Pick products that most need a rating refresh (never fetched, or oldest)
+function _pickRatingTargets(limit){
+  var all=[];
+  Object.keys(DATA).forEach(function(c){Object.keys(DATA[c]).forEach(function(s){
+    DATA[c][s].forEach(function(it){
+      all.push({asin:it.asin,t:it.ratingFetchedAt||0});
+    });
+  });});
+  all.sort(function(a,b){return a.t-b.t;});  // oldest / never first
+  return all.slice(0,limit).map(function(x){return x.asin;});
+}
+
+function _setRatingFetchedAt(asin){
+  var loc=findItem(asin);
+  if(loc.cat){
+    var it=DATA[loc.cat][loc.sub][loc.idx];
+    if(it)it.ratingFetchedAt=Date.now();
+  }
+}
+
+// The background trickle runner
+function startRatingTrickle(){
+  if(_ratingJob.running)return;
+  if(!_isElectronEnv())return;
+  // Check setting
+  if(!window.electronAPI||!window.electronAPI.getSettings)return;
+  window.electronAPI.getSettings().then(function(s){
+    if(!s||!s.autoRating)return;  // setting off
+    var state=_loadRatingState();
+    var remaining=_ratingJob.quota-state.doneToday;
+    if(remaining<=0)return;  // today's quota used up
+
+    var targets=_pickRatingTargets(remaining);
+    if(!targets.length)return;
+
+    _ratingJob.running=true;
+    _ratingJob.cancelled=false;
+    var idx=0,ok=0;
+
+    function updateBar(){
+      var el=q('sb-rating-progress');
+      if(el){
+        el.style.display='';
+        el.textContent='星级更新 '+idx+'/'+targets.length+' 今日';
+      }
+    }
+    function hideBar(){
+      var el=q('sb-rating-progress');
+      if(el)setTimeout(function(){el.style.display='none';},5000);
+    }
+
+    function next(){
+      if(_ratingJob.cancelled||idx>=targets.length){
+        _ratingJob.running=false;
+        var st=_loadRatingState();
+        st.doneToday+=idx;
+        _saveRatingState(st);
+        if(ok>0){markDirty();save();renderGrid();}
+        updateBar();hideBar();
+        return;
+      }
+      var asin=targets[idx];
+      updateBar();
+      fetchAmazonRating(asin).then(function(res){
+        if(res&&(res.star!==undefined||res.ratings!==undefined)){
+          var loc=findItem(asin);
+          if(loc.cat){
+            var it=DATA[loc.cat][loc.sub][loc.idx];
+            if(it){
+              // REQ7 confirm A: overwrite with scraped value
+              if(res.star!==undefined)it.star=res.star;
+              if(res.ratings!==undefined)it.ratings=res.ratings;
+              it.ratingFetchedAt=Date.now();
+              // Keep REVIEW_HIST in sync if it exists
+              if(typeof REVIEW_HIST!=='undefined'){
+                if(!REVIEW_HIST[asin])REVIEW_HIST[asin]=[];
+                REVIEW_HIST[asin].push({date:new Date().toISOString().slice(0,10),star:it.star,ratings:it.ratings});
+                if(REVIEW_HIST[asin].length>30)REVIEW_HIST[asin].shift();
+              }
+              ok++;
+            }
+          }
+        } else {
+          // Failed — still mark attempt time so we don't retry immediately,
+          // but use a SHORTER backoff: mark only half so it retries sooner.
+          _setRatingFetchedAt(asin);
+        }
+        idx++;
+        // 25 second gap between requests to avoid anti-bot
+        setTimeout(next,25000);
+      }).catch(function(){
+        idx++;
+        setTimeout(next,25000);
+      });
+    }
+    // Start after a short delay
+    setTimeout(next,2000);
+  });
+}
+
+// Kick off the trickle ~30 seconds after app loads (let UI settle first)
+setTimeout(function(){
+  if(_isElectronEnv())startRatingTrickle();
+},30000);
+
 function updateStatusBar(){
   try{
     var total=0;

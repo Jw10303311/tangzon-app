@@ -63,6 +63,7 @@ function getSettings() {
     notifyExpiring: cfg.notifyExpiring !== false,
     notifyBackup: cfg.notifyBackup !== false,
     minToTray: cfg.minToTray !== false,
+    autoRating: cfg.autoRating || false,
     closeToTrayShown: cfg.closeToTrayShown || false
   };
 }
@@ -311,11 +312,29 @@ function setupAutoUpdater() {
   });
 
   autoUpdater.on('update-not-available', () => {
-    // 静默，无需打扰用户
+    // 手动检查时给"已是最新"提示；自动检查时静默
+    if (_manualUpdateCheck && mainWindow) {
+      dialog.showMessageBox(mainWindow, {
+        type: 'info',
+        title: '检查更新',
+        message: '当前已是最新版本',
+        detail: '版本 v' + app.getVersion()
+      });
+    }
+    _manualUpdateCheck = false;
   });
 
   autoUpdater.on('error', (err) => {
     console.error('Auto-update error:', err);
+    if (_manualUpdateCheck && mainWindow) {
+      dialog.showMessageBox(mainWindow, {
+        type: 'warning',
+        title: '检查更新失败',
+        message: '检查更新时出错',
+        detail: String(err && err.message ? err.message : err)
+      });
+    }
+    _manualUpdateCheck = false;
   });
 
   autoUpdater.on('update-downloaded', (info) => {
@@ -337,6 +356,8 @@ function setupAutoUpdater() {
   });
 }
 
+let _manualUpdateCheck = false;
+
 function checkForUpdates(silent) {
   if (!autoUpdater) {
     if (!silent && mainWindow) {
@@ -344,10 +365,27 @@ function checkForUpdates(silent) {
     }
     return;
   }
+  _manualUpdateCheck = !silent;
   try {
-    autoUpdater.checkForUpdates();
+    const p = autoUpdater.checkForUpdates();
+    if (p && p.catch) {
+      p.catch((e) => {
+        console.error('checkForUpdates failed:', e);
+        if (!silent && mainWindow) {
+          dialog.showMessageBox(mainWindow, {
+            type: 'warning',
+            title: '检查更新失败',
+            message: '无法连接到更新服务器',
+            detail: '请检查网络连接后重试。\n\n错误: ' + (e && e.message ? e.message : String(e))
+          });
+        }
+      });
+    }
   } catch (e) {
-    console.error('checkForUpdates failed:', e);
+    console.error('checkForUpdates exception:', e);
+    if (!silent && mainWindow) {
+      dialog.showMessageBox(mainWindow, { type: 'warning', title: '检查更新失败', message: String(e) });
+    }
   }
 }
 
