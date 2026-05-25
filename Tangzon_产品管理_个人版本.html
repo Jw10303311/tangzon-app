@@ -3,46 +3,46 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Tangzon 产品管理 v3.1</title>
+<title>Tangzon 产品管理</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&family=Noto+Sans+SC:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
 :root{
-  /* Surfaces — warmer, modern off-whites */
-  --bg:#f8fafc;
+  /* Surfaces — WeChat-style warm grey/white */
+  --bg:#ededed;
   --sur:#ffffff;
-  --sur2:#f1f5f9;
-  --sur3:#e2e8f0;
-  /* Borders — subtle hierarchy */
-  --bor:#e5e9f0;
-  --bor2:#cbd5e1;
-  --bor-soft:#f1f5f9;
-  /* Text — refined zinc/slate */
-  --tx:#0f172a;
-  --tx2:#475569;
-  --tx3:#94a3b8;
-  --tx4:#cbd5e1;
-  /* Accent — sophisticated indigo */
-  --accent:#4f46e5;
-  --accent-2:#4338ca;
-  --accent-bg:#eef2ff;
-  --accent-bor:#c7d2fe;
-  --blue:#2563eb;
-  /* Semantic */
-  --green:#059669;--green-bg:#ecfdf5;--green-bor:#a7f3d0;
-  --red:#dc2626;--red-bg:#fef2f2;--red-bor:#fca5a5;
-  --orange:#ea580c;--gold:#ca8a04;
-  --star:#f59e0b;
-  --edit:#7c3aed;--edit-bg:#f5f3ff;--edit-bor:#d8b4fe;
+  --sur2:#f5f5f5;
+  --sur3:#ebebeb;
+  /* Borders — very subtle, WeChat uses hairlines */
+  --bor:#e7e7e7;
+  --bor2:#dcdcdc;
+  --bor-soft:#f2f2f2;
+  /* Text — three calm greys */
+  --tx:#1a1a1a;
+  --tx2:#576b95;
+  --tx3:#888888;
+  --tx4:#b2b2b2;
+  /* Accent — 飞书蓝 (restrained, used sparingly) */
+  --accent:#3370ff;
+  --accent-2:#2860e1;
+  --accent-bg:#eef3ff;
+  --accent-bor:#c2d4ff;
+  --blue:#3370ff;
+  /* Semantic — muted, low saturation */
+  --green:#2ba471;--green-bg:#eef9f3;--green-bor:#b4e0ca;
+  --red:#d54941;--red-bg:#fdf0ef;--red-bor:#f0bdba;
+  --orange:#e37318;--gold:#c08a2e;
+  --star:#ffb302;
+  --edit:#3370ff;--edit-bg:#eef3ff;--edit-bor:#c2d4ff;
   /* Layout */
   --sb:280px;--hd:60px;
-  /* Shadows — refined elevation */
-  --sh-sm:0 1px 2px rgba(15,23,42,.04);
-  --sh-md:0 1px 3px rgba(15,23,42,.06),0 1px 2px rgba(15,23,42,.04);
-  --sh-lg:0 4px 12px rgba(15,23,42,.08),0 2px 4px rgba(15,23,42,.04);
-  --sh-xl:0 12px 28px rgba(15,23,42,.12),0 4px 10px rgba(15,23,42,.06);
-  /* Radius */
-  --r-sm:5px;--r:8px;--r-md:10px;--r-lg:14px;--r-xl:16px;
+  /* Shadows — extremely soft, almost flat (WeChat aesthetic) */
+  --sh-sm:0 1px 2px rgba(0,0,0,.03);
+  --sh-md:0 1px 3px rgba(0,0,0,.04);
+  --sh-lg:0 2px 8px rgba(0,0,0,.06);
+  --sh-xl:0 8px 24px rgba(0,0,0,.10);
+  /* Radius — unified 8px like WeChat cards */
+  --r-sm:6px;--r:8px;--r-md:8px;--r-lg:10px;--r-xl:12px;
   /* Animation */
   --easing:cubic-bezier(.4,0,.2,1);
 }
@@ -57,7 +57,7 @@ a{color:inherit;text-decoration:none;}
 /* HEADER ──────────────────────────────────────────────── */
 .hd{position:fixed;top:0;left:0;right:0;height:var(--hd);z-index:300;background:var(--sur);border-bottom:1px solid var(--bor);display:flex;align-items:center;padding:0 22px 0 18px;gap:18px;backdrop-filter:saturate(180%) blur(12px);background:rgba(255,255,255,.96);}
 .hd-logo{font-family:"Inter",sans-serif;font-size:17px;font-weight:800;letter-spacing:-.04em;flex-shrink:0;color:var(--tx);}
-.hd-logo span{background:linear-gradient(135deg,var(--accent) 0%,var(--blue) 100%);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;}
+.hd-logo span{color:var(--accent);}
 .hd-stats{display:flex;flex:1;overflow:hidden;gap:6px;align-items:center;}
 .hd-stat{display:flex;flex-direction:column;align-items:flex-start;padding:0 14px;border-right:1px solid var(--bor-soft);}
 .hd-stat:last-child{border-right:none;}
@@ -185,18 +185,22 @@ a{color:inherit;text-decoration:none;}
 /* PRODUCT GRID */
 .pg{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:14px;contain:layout style;}
 .pc{background:var(--sur);border:1px solid var(--bor);border-radius:var(--r-md);overflow:hidden;transition:all .18s var(--easing);position:relative;contain:layout style paint;}
-.pc:hover{border-color:var(--bor2);box-shadow:var(--sh-lg);transform:translateY(-1px);}
+.pc:hover{border-color:var(--bor2);box-shadow:var(--sh-md);}
 .pc.starred{border-color:var(--star);box-shadow:0 0 0 1px var(--star);}
 .pc.starred:hover{box-shadow:0 0 0 1px var(--star),var(--sh-lg);}
-.pc.grade-A{background:linear-gradient(180deg,#f0fdf4 0%,#fff 30%);border-color:#86efac;}
-.pc.grade-B{background:linear-gradient(180deg,#eff6ff 0%,#fff 30%);border-color:#93c5fd;}
-.pc.grade-C{background:linear-gradient(180deg,#fefce8 0%,#fff 30%);border-color:#fde68a;}
-.pc.grade-D{background:linear-gradient(180deg,#fff1f2 0%,#fff 30%);border-color:#fca5a5;}
+.pc.grade-A{background:var(--sur);border-color:var(--bor);}
+.pc.grade-B{background:var(--sur);border-color:var(--bor);}
+.pc.grade-C{background:var(--sur);border-color:var(--bor);}
+.pc.grade-D{background:var(--sur);border-color:var(--bor);}
+.pc.grade-A::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:#2ba471;border-radius:8px 0 0 8px;}
+.pc.grade-B::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:#3370ff;border-radius:8px 0 0 8px;}
+.pc.grade-C::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:#e0a82e;border-radius:8px 0 0 8px;}
+.pc.grade-D::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:#d54941;border-radius:8px 0 0 8px;}
 .grade-badge{font-size:9.5px;font-weight:700;border-radius:5px;padding:2px 7px;line-height:1.5;cursor:pointer;user-select:none;letter-spacing:.02em;font-family:"Inter",sans-serif;}
-.grade-badge.grade-A{background:#dcfce7;color:#15803d;border:1px solid #86efac;}
-.grade-badge.grade-B{background:#dbeafe;color:#1d4ed8;border:1px solid #93c5fd;}
-.grade-badge.grade-C{background:#fef9c3;color:#a16207;border:1px solid #fde047;}
-.grade-badge.grade-D{background:#fee2e2;color:#b91c1c;border:1px solid #fca5a5;}
+.grade-badge.grade-A{background:#eef9f3;color:#2ba471;border:1px solid #b4e0ca;}
+.grade-badge.grade-B{background:#eef3ff;color:#3370ff;border:1px solid #c2d4ff;}
+.grade-badge.grade-C{background:#fdf4e3;color:#c08a2e;border:1px solid #ecd9a8;}
+.grade-badge.grade-D{background:#fdf0ef;color:#d54941;border:1px solid #f0bdba;}
 .grade-badge.grade-none{background:var(--sur2);color:var(--tx3);border:1px solid var(--bor);}
 .p-star{position:absolute;top:7px;right:7px;z-index:5;width:24px;height:24px;border-radius:50%;border:1px solid var(--bor);background:rgba(255,255,255,.95);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--tx3);transition:all .15s var(--easing);backdrop-filter:blur(4px);box-shadow:var(--sh-sm);}
 .pc.starred .p-star{color:var(--star);border-color:var(--star);background:#fff8e7;}
@@ -363,7 +367,7 @@ a{color:inherit;text-decoration:none;}
 .promo-card-img{width:34px;height:34px;border-radius:6px;border:1px solid var(--bor);overflow:hidden;display:flex;align-items:center;justify-content:center;background:var(--sur2);flex-shrink:0;}
 .promo-card-img img{width:100%;height:100%;object-fit:contain;}
 /* Promo badge on product cards */
-.p-promo{position:absolute;top:7px;left:32px;z-index:6;font-size:9px;font-weight:700;color:#fff;background:linear-gradient(135deg,#f97316,#ea580c);padding:2px 7px;border-radius:99px;letter-spacing:.04em;box-shadow:0 1px 3px rgba(234,88,12,.4);}
+.p-promo{position:absolute;top:7px;left:32px;z-index:6;font-size:9px;font-weight:600;color:#fff;background:var(--orange);padding:2px 7px;border-radius:99px;letter-spacing:.03em;}
 
 /* Background batch progress widget — bottom-right, non-blocking */
 .bg-job{position:fixed;bottom:24px;right:24px;width:300px;background:var(--sur);border:1px solid var(--bor);border-radius:12px;box-shadow:0 12px 32px rgba(15,23,42,.18),0 4px 12px rgba(15,23,42,.08);z-index:800;overflow:hidden;animation:bgJobIn .25s var(--easing);}
@@ -378,7 +382,7 @@ a{color:inherit;text-decoration:none;}
 .bg-job-stats{display:flex;justify-content:space-between;font-family:"JetBrains Mono",monospace;font-size:10.5px;color:var(--tx3);margin-bottom:7px;font-weight:500;}
 .bg-job-stats b{color:var(--tx);font-weight:600;}
 .bg-job-bar-wrap{height:4px;background:var(--sur2);border-radius:99px;overflow:hidden;}
-.bg-job-bar{height:100%;background:linear-gradient(90deg,var(--accent) 0%,var(--blue) 100%);border-radius:99px;width:0%;transition:width .4s var(--easing);}
+.bg-job-bar{height:100%;background:var(--accent);border-radius:99px;width:0%;transition:width .4s var(--easing);}
 .bg-job-stats .ok{color:var(--green);}
 .bg-job-stats .fail{color:var(--red);}
 .bg-job.done{border-color:var(--green-bor);}
@@ -404,18 +408,16 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid 
 
 /* ── DARK MODE ───────────────────────────────────────── */
 body.dark{
-  --bg:#0f172a;--sur:#1e293b;--sur2:#334155;--sur3:#475569;
-  --bor:#334155;--bor2:#475569;--bor-soft:#1e293b;
-  --tx:#f1f5f9;--tx2:#cbd5e1;--tx3:#94a3b8;--tx4:#475569;
-  --accent-bg:#1e1b4b;--accent-bor:#4338ca;
-  --green-bg:#022c22;--green-bor:#065f46;
-  --red-bg:#450a0a;--red-bor:#7f1d1d;
-  --edit-bg:#2e1065;--edit-bor:#6b21a8;
+  --bg:#1a1a1a;--sur:#242424;--sur2:#2e2e2e;--sur3:#3a3a3a;
+  --bor:#3a3a3a;--bor2:#4a4a4a;--bor-soft:#2a2a2a;
+  --tx:#ededed;--tx2:#9aa6c4;--tx3:#888888;--tx4:#555555;
+  --accent:#4a82ff;--accent-2:#3370ff;--accent-bg:#1e2a4a;--accent-bor:#2e4480;
+  --blue:#4a82ff;
+  --green-bg:#16291f;--green-bor:#2a4d39;
+  --red-bg:#3a1f1e;--red-bor:#5e3330;
+  --edit-bg:#1e2a4a;--edit-bor:#2e4480;
 }
-body.dark .pc.grade-A{background:linear-gradient(180deg,#052e16 0%,var(--sur) 30%);}
-body.dark .pc.grade-B{background:linear-gradient(180deg,#1e3a8a 0%,var(--sur) 30%);}
-body.dark .pc.grade-C{background:linear-gradient(180deg,#713f12 0%,var(--sur) 30%);}
-body.dark .pc.grade-D{background:linear-gradient(180deg,#7f1d1d 0%,var(--sur) 30%);}
+body.dark .pc.grade-A,body.dark .pc.grade-B,body.dark .pc.grade-C,body.dark .pc.grade-D{background:var(--sur);}
 body.dark .hd{background:rgba(15,23,42,.92);}
 
 /* ── DENSITY MODES ───────────────────────────────────── */
@@ -562,10 +564,10 @@ body.dark .cpal{background:rgba(0,0,0,.7);}
             <span style="font-size:10px;color:var(--tx3);font-weight:600">等级筛选:</span>
             <div class="sgrp" id="grade-filter-grp">
               <button class="sb active" data-grade="" onclick="setGradeFilter(this,'')">全部</button>
-              <button class="sb grade-A-btn" data-grade="A" onclick="setGradeFilter(this,'A')" style="background:#dcfce7;color:#15803d;border-color:#86efac">A 类</button>
-              <button class="sb grade-B-btn" data-grade="B" onclick="setGradeFilter(this,'B')" style="background:#dbeafe;color:#1d4ed8;border-color:#93c5fd">B 类</button>
-              <button class="sb grade-C-btn" data-grade="C" onclick="setGradeFilter(this,'C')" style="background:#fef9c3;color:#a16207;border-color:#fde047">C 类</button>
-              <button class="sb grade-D-btn" data-grade="D" onclick="setGradeFilter(this,'D')" style="background:#fee2e2;color:#b91c1c;border-color:#fca5a5">D 类</button>
+              <button class="sb grade-A-btn" data-grade="A" onclick="setGradeFilter(this,'A')" style="background:#eef9f3;color:#2ba471;border-color:#b4e0ca">A 类</button>
+              <button class="sb grade-B-btn" data-grade="B" onclick="setGradeFilter(this,'B')" style="background:#eef3ff;color:#3370ff;border-color:#c2d4ff">B 类</button>
+              <button class="sb grade-C-btn" data-grade="C" onclick="setGradeFilter(this,'C')" style="background:#fdf4e3;color:#c08a2e;border-color:#ecd9a8">C 类</button>
+              <button class="sb grade-D-btn" data-grade="D" onclick="setGradeFilter(this,'D')" style="background:#fdf0ef;color:#d54941;border-color:#f0bdba">D 类</button>
             </div>
             <button id="btn-clr-flt" class="btn-c" onclick="clearFilters()" style="font-size:9px;display:none;align-items:center;padding:2px 8px;color:var(--red);border-color:#fca5a5">✕ 清除</button>
           </div>
@@ -870,7 +872,7 @@ var _promoFilter='all';  // 'all' | 'active' | 'upcoming' | 'ended'
 var _activeSubtype='';  // current 3rd-level filter, '' = 全部
 var SUB_OWNERS={"室内家居|Stepstools":"蒋玮","室内家居|Fireplace Spark Protection":"蒋玮","电器类|Teppanyaki Grills":"蒋玮","电器类|Electrical Fireplaces":"蒋玮","电器类|Sandwich Toasters & Panini Presses":"蒋玮","普通装饰类|Decorative Artificial Plants":"蒋玮","普通装饰类|Decorative Artificial Trees":"蒋玮","节日装饰类|Christmas Trees":"蒋玮","节日装饰类|Novelty Decorations":"蒋玮","厨房家具类|Outdoor Pizza Ovens":"蒋玮","厨房家具类|Bar Sets":"蒋玮","厨房家具类|Bar Tables":"蒋玮","厨房家具类|Dining Room Sets":"蒋玮","厨房家具类|Dining Chairs":"蒋玮","厨房家具类|Folding Chairs":"蒋玮","厨房家具类|Barstools":"蒋玮","厨房家具类|Dining Tables":"蒋玮","工具汽配类|Stepladders":"蒋玮","工具汽配类|Material Handling Ramps":"蒋玮","工具汽配类|Roof Racks":"蒋玮","工具汽配类|Roof Boxes":"蒋玮","工具汽配类|Pressure Washer Lances & Wands":"蒋玮","工具汽配类|Crimpers":"蒋玮","工具汽配类|Engine Hoists":"蒋玮","工具汽配类|Motorbike Stands":"蒋玮","工具汽配类|Motorbike Lifts":"蒋玮","工具汽配类|Axle Stands":"蒋玮","工具汽配类|Garage Shelves":"蒋玮","工具汽配类|Gun Cabinets":"蒋玮","工具汽配类|Wheelchair & Mobility Scooter Ramps":"蒋玮","野营遮阳类|Parasol Stands & Bases":"蒋玮","野营遮阳类|Garden Parasols":"蒋玮","野营遮阳类|Pop-Up Tents":"蒋玮","野营遮阳类|Beach Umbrellas":"蒋玮","野营遮阳类|Outdoor Canopies":"蒋玮","野营遮阳类|Camping Coolers & Cool Bags":"蒋玮","野营遮阳类|Camp Stoves":"蒋玮","野营遮阳类|Gazebos":"蒋玮","野营遮阳类|Event Shelters":"蒋玮","野营遮阳类|Window Awnings & Canopies":"蒋玮","野营遮阳类|Dome Tents":"蒋玮","户外家具|Garden Dining Chairs":"蒋玮","户外家具|Charcoal Barbecues":"蒋玮","户外家具|Patio Bistro Sets":"蒋玮","户外家具|Outdoor Cocktail Tables":"蒋玮","户外家具|Patio Dining Sets":"蒋玮","户外家具|Benches":"蒋玮"};  // {cat+'|'+sub: '运营姓名'}  // {cat+'|'+sub: '运营姓名'}
 var PROD_SALES={};  // {asin: sales_amount}  — product-page sales, independent from analysis
-var OWNER_COLORS=['#2355d4','#16a34a','#c07d18','#c0293a','#7c3aed','#0891b2','#ea580c','#b45309'];
+var OWNER_COLORS=['#3370ff','#2ba471','#c08a2e','#d54941','#6554c0','#1d8cb3','#e37318','#9a6b3f'];
 function getOwnerColor(name){
   if(!name)return '';
   var owners=[];
@@ -1059,7 +1061,7 @@ function initIDB(){
 }
 
 var _renderTimer=null,_observer=null,_tipEl=null,_imgTipEl=null,_selCatForSub=null,_selSubForAsins=null,_undoStack=[],_selAsins=new Set();
-var CHART_COLORS=['#2355d4','#16a34a','#c07d18','#c0293a','#7c3aed','#0891b2','#ea580c','#64748b','#10b981','#f59e0b'];
+var CHART_COLORS=['#3370ff','#2ba471','#c08a2e','#d54941','#6554c0','#1d8cb3','#e37318','#888888','#43b88c','#e0a82e'];
 
 // ── Subtype (3rd-level) helpers ─────────────────────────────────
 function _subtypeKey(cat, sub){return cat+'|'+sub;}
@@ -2668,6 +2670,8 @@ function initCardDrag(grid){
       _dragSrcAsin=null;_dragGroup=[];return;
     }
     var arr=DATA[actMain][actSub];
+    // BUG FIX: take an undo snapshot BEFORE moving (drag-reorder was not undoable)
+    snapshotForUndo();
     // REQ5: pull out ALL items in the drag group (preserving their relative order)
     var groupSet={};
     _dragGroup.forEach(function(a){groupSet[a]=true;});
@@ -3283,14 +3287,19 @@ function importJson(text){
       REVIEW_HIST=d.REVIEW_HIST||{};
       SUB_OWNERS=d.SUB_OWNERS||{};
       PROD_SALES=d.PROD_SALES||{};
+      // BUG FIX: actually READ SUB_TYPES and PROMOTIONS from the imported file
+      // (previously these were saved to localStorage but never read in, so
+      //  transferring a backup between computers lost all 细分类型 and 活动池)
+      if(typeof d.SUB_TYPES==='object'&&d.SUB_TYPES)SUB_TYPES=d.SUB_TYPES;
+      if(typeof d.PROMOTIONS==='object'&&d.PROMOTIONS)PROMOTIONS=d.PROMOTIONS;
       localStorage.setItem('tz3_starred',JSON.stringify(STARRED));
       localStorage.setItem('tz3_hist',JSON.stringify(HIST));
       localStorage.setItem('tz3_retired',JSON.stringify(RETIRED));
       localStorage.setItem('tz3_sales_base',JSON.stringify(SALES_BASE));
       localStorage.setItem('tz3_sales_cmp',JSON.stringify(SALES_CMP));
       localStorage.setItem('tz3_reviews',JSON.stringify(REVIEW_HIST));
-    localStorage.setItem('tz3_subtypes',JSON.stringify(SUB_TYPES));
-    localStorage.setItem('tz3_promotions',JSON.stringify(PROMOTIONS));
+      localStorage.setItem('tz3_subtypes',JSON.stringify(SUB_TYPES));
+      localStorage.setItem('tz3_promotions',JSON.stringify(PROMOTIONS));
       localStorage.setItem('tz3_sub_owners',JSON.stringify(SUB_OWNERS));
       localStorage.setItem('tz3_prod_sales',JSON.stringify(PROD_SALES));
       if(d.IMGS&&typeof IMGS!=='undefined'){
@@ -4599,8 +4608,27 @@ setTimeout(function(){
 // 更新日志 (Changelog)
 // 每次发新版，在 CHANGELOG 数组最前面加一条即可。
 // ════════════════════════════════════════════════════════════════
-var APP_VERSION='3.2.0';
+var APP_VERSION='3.3.0';
+// 标题栏自动显示当前版本号（跟随 APP_VERSION，不用手动改）
+try{ document.title = 'Tangzon 产品管理 v' + APP_VERSION; }catch(e){}
 var CHANGELOG=[
+  {
+    v:'3.3.0', date:'2026-05-25',
+    notes:[
+      '优化：界面整体改为微信极简风格 + 飞书蓝主色调',
+      '优化：去除渐变和重阴影，改为扁平卡片 + 极淡边框',
+      '优化：等级用左侧细色条标识，配色更克制耐看',
+      '优化：留白加大，深色模式同步调整',
+      '修复：标题栏版本号不会自动更新（现在自动跟随）'
+    ]
+  },
+  {
+    v:'3.2.1', date:'2026-05-25',
+    notes:[
+      '修复：导入 JSON 备份时，细分类型和活动池数据没有被读取（换电脑时类型丢失的根因）',
+      '修复：拖动移动产品后无法撤销的问题'
+    ]
+  },
   {
     v:'3.2.0', date:'2026-05-25',
     notes:[
