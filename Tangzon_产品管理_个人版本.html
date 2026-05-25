@@ -511,6 +511,7 @@ body.dark .cpal{background:rgba(0,0,0,.7);}
       <button class="hd-tab" id="tab-watch" onclick="switchTab('watch')">关注</button>
       <button class="hd-tab" id="tab-promo" onclick="switchTab('promo')">活动池<span id="tab-promo-cnt" style="margin-left:4px;font-family:'JetBrains Mono',monospace;font-size:9.5px;background:#fff3e0;color:#ea580c;padding:1px 6px;border-radius:99px;display:none">0</span></button>
       <button class="hd-tab" id="tab-retired" onclick="switchTab('retired')">淘汰</button>
+      <button class="hd-tab" id="tab-inbox" onclick="switchTab('inbox')">待分配<span id="tab-inbox-cnt" style="margin-left:4px;font-family:'JetBrains Mono',monospace;font-size:9.5px;background:var(--accent-bg);color:var(--accent);padding:1px 6px;border-radius:99px;display:none">0</span></button>
     </div>
   </div>
 </div>
@@ -768,8 +769,9 @@ body.dark .cpal{background:rgba(0,0,0,.7);}
   <div style="margin-top:14px;padding:10px;background:var(--accent-bg);border-radius:7px;font-size:11px;color:var(--tx2);line-height:1.6">
     💡 <b>提示</b>：拖放 .json/.xlsx/.csv 文件到窗口可直接导入。拖图片到产品卡（管理模式下）会替换该产品图片。
   </div>
-  <div style="margin-top:10px;text-align:center">
+  <div style="margin-top:10px;text-align:center;display:flex;gap:16px;justify-content:center">
     <button onclick="showChangelog()" style="background:transparent;border:0;color:var(--accent);font-size:11.5px;cursor:pointer;text-decoration:underline;font-family:inherit">查看更新日志</button>
+    <button onclick="showRatingLog()" style="background:transparent;border:0;color:var(--accent);font-size:11.5px;cursor:pointer;text-decoration:underline;font-family:inherit">星级抓取记录</button>
   </div>
   <div class="fa">
     <button class="btn-ok" onclick="saveAppSettings()">完成</button>
@@ -786,13 +788,35 @@ body.dark .cpal{background:rgba(0,0,0,.7);}
 </div>
 
 
+    <div id="v-inbox" style="display:none">
+      <div class="dash-hd" style="margin-bottom:14px">
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <div class="dash-title">待分配产品</div>
+          <span id="inbox-meta" style="font-size:11px;color:var(--tx3)"></span>
+        </div>
+        <p style="font-size:11px;color:var(--tx3);margin-top:4px">导入但还未归类的产品。抓好图后，勾选产品分配到你自己的大类/小类。</p>
+      </div>
+      <div id="inbox-toolbar" style="display:none;align-items:center;gap:10px;padding:8px 12px;background:var(--accent-bg);border-radius:8px;margin-bottom:12px;flex-wrap:wrap">
+        <span style="font-size:11px;color:var(--accent);font-weight:600" id="inbox-sel-count">已选 0 个</span>
+        <button class="btn-c" onclick="openAssignModal()" style="font-size:10px;color:var(--accent);border-color:var(--accent-bor)">分配到类目</button>
+        <button class="btn-c" onclick="batchFetchInboxImgs()" style="font-size:10px">批量抓图（缺图）</button>
+        <button class="btn-c" onclick="clearInboxSelection()" style="font-size:10px">取消选择</button>
+      </div>
+      <div id="inbox-grid" class="pg"></div>
+      <div id="inbox-empty" style="display:none;padding:60px 20px;text-align:center;color:var(--tx3)">
+        <div style="font-size:36px;margin-bottom:10px">📥</div>
+        <div style="font-size:13px;font-weight:600;color:var(--tx2)">待分配区是空的</div>
+        <div style="font-size:11px;margin-top:6px">导入产品时选择「导入到待分配区」，产品会先到这里</div>
+      </div>
+    </div>
+
 <!-- Status bar (bottom) -->
 <div class="statusbar" id="statusbar">
   <div class="statusbar-item"><span class="statusbar-dot" id="sb-dot"></span><span>就绪</span></div>
   <div class="statusbar-item"><b id="sb-products">0</b>产品</div>
   <div class="statusbar-item"><b id="sb-starred">0</b>关注</div>
   <div class="statusbar-item"><b id="sb-promos">0</b>活动</div>
-  <div class="statusbar-item right" id="sb-rating-progress" style="display:none;color:var(--accent)"></div>
+  <div class="statusbar-item right" id="sb-rating-progress" style="display:none;color:var(--accent);cursor:pointer" onclick="showRatingLog()" title="点击查看抓取记录"></div>
   <div class="statusbar-item" id="sb-backup">从未备份</div>
   <div class="statusbar-item"><span id="sb-time"></span></div>
 </div>
@@ -851,6 +875,64 @@ body.dark .cpal{background:rgba(0,0,0,.7);}
   </div>
 </div></div>
 
+<!-- Rating fetch log modal -->
+<div class="mo" id="mo-rating-log"><div class="md" style="width:480px;max-height:78vh;display:flex;flex-direction:column">
+  <button class="md-x" onclick="closeMo('mo-rating-log')">✕</button>
+  <div class="md-title">星级抓取记录</div>
+  <div class="md-sub">后台抓取星级/评论数的成功与失败记录</div>
+  <div id="rating-log-body" style="overflow-y:auto;margin-top:8px;flex:1"></div>
+  <div class="fa">
+    <button class="btn-ok" onclick="closeMo('mo-rating-log')">知道了</button>
+  </div>
+</div></div>
+
+<!-- Assign to category modal -->
+<div class="mo" id="mo-assign"><div class="md" style="width:420px">
+  <button class="md-x" onclick="closeMo('mo-assign')">✕</button>
+  <div class="md-title">分配到类目</div>
+  <div class="md-sub" id="assign-sub">把所选产品归入大类 / 小类</div>
+  <div class="fg" style="margin-top:8px">
+    <label class="fl">大类</label>
+    <select class="fsel" id="assign-cat" onchange="onAssignCatChange()"></select>
+  </div>
+  <div class="fg">
+    <label class="fl">小类</label>
+    <select class="fsel" id="assign-sub-sel"></select>
+  </div>
+  <div style="margin-top:6px;padding:9px 11px;background:var(--sur2);border-radius:7px">
+    <div style="font-size:11px;color:var(--tx2);margin-bottom:6px">找不到合适的类目？当场新建：</div>
+    <div style="display:flex;gap:6px;margin-bottom:6px">
+      <input class="fi" id="assign-new-cat" placeholder="新大类名称" style="flex:1;font-size:12px">
+      <button class="btn-c" onclick="assignCreateCat()" style="font-size:10px;white-space:nowrap">建大类</button>
+    </div>
+    <div style="display:flex;gap:6px">
+      <input class="fi" id="assign-new-sub" placeholder="新小类名称（建在上方所选大类下）" style="flex:1;font-size:12px">
+      <button class="btn-c" onclick="assignCreateSub()" style="font-size:10px;white-space:nowrap">建小类</button>
+    </div>
+  </div>
+  <div class="fa">
+    <button class="btn-c" onclick="closeMo('mo-assign')">取消</button>
+    <button class="btn-ok" onclick="confirmAssign()">确认分配</button>
+  </div>
+</div></div>
+
+<!-- Import target choice modal -->
+<div class="mo" id="mo-import-target"><div class="md" style="width:400px">
+  <button class="md-x" onclick="closeMo('mo-import-target')">✕</button>
+  <div class="md-title">导入方式</div>
+  <div class="md-sub">选择产品导入到哪里</div>
+  <div style="margin-top:10px;display:flex;flex-direction:column;gap:8px">
+    <button onclick="confirmImportTarget('inbox')" style="text-align:left;padding:12px 14px;background:var(--sur2);border:1px solid var(--bor);border-radius:8px;cursor:pointer;font-family:inherit">
+      <div style="font-weight:600;font-size:13px;color:var(--tx)">导入到待分配区</div>
+      <div style="font-size:11px;color:var(--tx3);margin-top:3px">产品先进待分配区，之后自己归类。适合类目和模板不一致时。</div>
+    </button>
+    <button onclick="confirmImportTarget('direct')" style="text-align:left;padding:12px 14px;background:var(--sur2);border:1px solid var(--bor);border-radius:8px;cursor:pointer;font-family:inherit">
+      <div style="font-weight:600;font-size:13px;color:var(--tx)">按文件里的大类/小类直接导入</div>
+      <div style="font-size:11px;color:var(--tx3);margin-top:3px">文件已包含正确的大类/小类列时用这个。</div>
+    </button>
+  </div>
+</div></div>
+
 <div class="toast" id="toast"></div>
 <div class="sbanner" id="sbanner">
   <span class="sbanner-t">✅ 已自动保存到本地</span>
@@ -870,6 +952,8 @@ var SUB_TRANS = {"Air Purifiers":"空气净化器","Air Tool Accessories":"气�
 
 var DATA=null,STARRED={},HIST=[],RETIRED={},SALES_BASE={},SALES_CMP={},actMain='__all__',actSub='__all__';
 var SUB_TYPES={};  // { 'cat|sub': ['类型1', '类型2', ...] }
+var UNASSIGNED=[];  // 待分配区：导入但未归类的产品 [{asin,sku,new_sku,price,star,ratings,img,...}]
+var _inboxSel=new Set();  // 待分配区已勾选的 asin
 var PROMOTIONS={};  // { promo_id: {id,type,startDate,endDate,notes,products:[...]} }
 var _promoFilter='all';  // 'all' | 'active' | 'upcoming' | 'ended'
 var _activeSubtype='';  // current 3rd-level filter, '' = 全部
@@ -2186,8 +2270,14 @@ function reorderKeys(type, parentCat, srcKey, tgtKey, insertAbove){
   // IMGS loaded async from IDB after init() — see initIDB()
   try{var so=localStorage.getItem('tz3_sub_owners');if(so){var _so=JSON.parse(so);Object.keys(_so).forEach(function(k){SUB_OWNERS[k]=_so[k];});}}catch(e){}
   try{var ps_=localStorage.getItem('tz3_prod_sales');if(ps_)PROD_SALES=JSON.parse(ps_);}catch(e){}
+  // BUG FIX: load SUB_TYPES and PROMOTIONS — these were saved to localStorage
+  // but never read back on startup, so 细分类型 vanished after every restart/update
+  try{var st_=localStorage.getItem('tz3_subtypes');if(st_)SUB_TYPES=JSON.parse(st_);}catch(e){}
+  try{var ua_=localStorage.getItem('tz3_unassigned');if(ua_)UNASSIGNED=JSON.parse(ua_);}catch(e){}
+  try{var pm_=localStorage.getItem('tz3_promotions');if(pm_){var _pm=JSON.parse(pm_);if(typeof PROMOTIONS==='object')Object.keys(_pm).forEach(function(k){PROMOTIONS[k]=_pm[k];});else PROMOTIONS=_pm;}}catch(e){}
   // SALES_BASE is populated only by explicit CSV/Excel import - no seeding from item.sales
   setupObserver();buildSidebar();renderGrid();updateStats();renderProdOwnerPanel();
+  if(typeof updateInboxBadge==='function')updateInboxBadge();
   if(localStorage.getItem('tz3_data'))toast('✓ 已加载本地保存数据');
   setTimeout(checkBackupReminder, 1500);
   if(typeof updatePromoTabBadge==='function')updatePromoTabBadge();
@@ -2232,6 +2322,7 @@ function save(){
     localStorage.setItem('tz3_sales_cmp',JSON.stringify(SALES_CMP));
     localStorage.setItem('tz3_reviews',JSON.stringify(REVIEW_HIST));
     localStorage.setItem('tz3_subtypes',JSON.stringify(SUB_TYPES));
+    localStorage.setItem('tz3_unassigned',JSON.stringify(UNASSIGNED));
     localStorage.setItem('tz3_promotions',JSON.stringify(PROMOTIONS));
   }catch(e){
     // Quota exceeded: try to recover by also removing the legacy tz3_imgs LS dump
@@ -3080,8 +3171,8 @@ function switchTab(tab){
   if(isMain)setTimeout(renderProdOwnerPanel,0);
 
   curTab=tab;
-  ['main','watch','promo','retired'].forEach(function(t){var b=q('tab-'+t);if(b)b.classList.toggle('active',t===tab);});
-  ['v-main','v-watch','v-promo','v-retired'].forEach(function(id){
+  ['main','watch','promo','retired','inbox'].forEach(function(t){var b=q('tab-'+t);if(b)b.classList.toggle('active',t===tab);});
+  ['v-main','v-watch','v-promo','v-retired','v-inbox'].forEach(function(id){
     var el=q(id);if(el)el.style.display=id==='v-'+tab?'block':'none';
   });
   // Sidebar action bar stays always visible. The cat tree (search + tree)
@@ -3094,6 +3185,7 @@ function switchTab(tab){
   if(tab==='watch')renderWatchlist();
   if(tab==='promo')renderPromoView();
   if(tab==='retired')renderRetired();
+  if(tab==='inbox')renderInbox();
 }
 
 // EDIT MODE ───────────────────────────────────────────────────────
@@ -3266,9 +3358,19 @@ document.addEventListener('click',function(e){if(!e.target.closest('.exp-wrap'))
 function handleImport(input){
   var file=input.files[0];if(!file)return;
   var ext=file.name.split('.').pop().toLowerCase();
-  if(ext==='json'){var r=new FileReader();r.onload=function(e){importJson(e.target.result);};r.readAsText(file,'utf-8');}
-  else if(ext==='xlsx'||ext==='xls'){readFileAsText(file,function(text){importProductCsv(text);});}
-  else{var r3=new FileReader();r3.onload=function(e){importProductCsv(e.target.result);};r3.readAsText(file,'utf-8');}
+  if(ext==='json'){
+    var r=new FileReader();
+    r.onload=function(e){_pendingImportText=e.target.result;_pendingImportType='json';openMo('mo-import-target');};
+    r.readAsText(file,'utf-8');
+  }
+  else if(ext==='xlsx'||ext==='xls'){
+    readFileAsText(file,function(text){_pendingImportText=text;_pendingImportType='csv';openMo('mo-import-target');});
+  }
+  else{
+    var r3=new FileReader();
+    r3.onload=function(e){_pendingImportText=e.target.result;_pendingImportType='csv';openMo('mo-import-target');};
+    r3.readAsText(file,'utf-8');
+  }
   input.value='';
 }
 
@@ -4565,6 +4667,7 @@ function startRatingTrickle(){
       var asin=targets[idx];
       updateBar();
       fetchAmazonRating(asin).then(function(res){
+        var logEntry={asin:asin,time:Date.now(),ok:false};
         if(res&&(res.star!==undefined||res.ratings!==undefined)){
           var loc=findItem(asin);
           if(loc.cat){
@@ -4574,20 +4677,23 @@ function startRatingTrickle(){
               if(res.star!==undefined)it.star=res.star;
               if(res.ratings!==undefined)it.ratings=res.ratings;
               it.ratingFetchedAt=Date.now();
-              // Keep REVIEW_HIST in sync if it exists
               if(typeof REVIEW_HIST!=='undefined'){
                 if(!REVIEW_HIST[asin])REVIEW_HIST[asin]=[];
                 REVIEW_HIST[asin].push({date:new Date().toISOString().slice(0,10),star:it.star,ratings:it.ratings});
                 if(REVIEW_HIST[asin].length>30)REVIEW_HIST[asin].shift();
               }
               ok++;
+              logEntry.ok=true;
+              logEntry.star=res.star;
+              logEntry.ratings=res.ratings;
+              logEntry.name=it.new_sku||it.sku||'';
             }
           }
         } else {
-          // Failed — still mark attempt time so we don't retry immediately,
-          // but use a SHORTER backoff: mark only half so it retries sooner.
           _setRatingFetchedAt(asin);
+          logEntry.reason=(res&&res.error==='robot_check')?'被反爬拦截':'页面没解析到数据';
         }
+        _pushRatingLog(logEntry);
         idx++;
         // 25 second gap between requests to avoid anti-bot
         setTimeout(next,25000);
@@ -4601,20 +4707,373 @@ function startRatingTrickle(){
   });
 }
 
+
+// 星级抓取日志 — 记录每次尝试（成功/失败），最多保留 200 条
+var RATING_LOG=[];
+try{var _rl=localStorage.getItem('tz3_rating_log');if(_rl)RATING_LOG=JSON.parse(_rl);}catch(e){}
+function _pushRatingLog(entry){
+  RATING_LOG.unshift(entry);
+  if(RATING_LOG.length>200)RATING_LOG=RATING_LOG.slice(0,200);
+  try{localStorage.setItem('tz3_rating_log',JSON.stringify(RATING_LOG));}catch(e){}
+}
+
+function showRatingLog(){
+  var body=q('rating-log-body');
+  if(!body)return;
+  if(!RATING_LOG.length){
+    body.innerHTML='<div style="padding:40px 20px;text-align:center;color:var(--tx3);font-size:12px">还没有抓取记录。<br>在设置里开启「自动更新星级」后，后台会开始抓取。</div>';
+  } else {
+    var okN=RATING_LOG.filter(function(e){return e.ok;}).length;
+    var failN=RATING_LOG.length-okN;
+    var head='<div style="display:flex;gap:14px;margin-bottom:12px;font-size:12px">'
+      +'<span style="color:var(--green);font-weight:600">成功 '+okN+'</span>'
+      +'<span style="color:var(--red);font-weight:600">失败 '+failN+'</span>'
+      +'<span style="color:var(--tx3)">最近 '+RATING_LOG.length+' 条</span>'
+      +'</div>';
+    var rows=RATING_LOG.map(function(e){
+      var d=new Date(e.time);
+      var ts=(d.getMonth()+1)+'/'+d.getDate()+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
+      var statusHtml,detailHtml;
+      if(e.ok){
+        statusHtml='<span style="color:var(--green);font-size:11px;font-weight:600;flex-shrink:0">✓ 成功</span>';
+        detailHtml='<span style="color:var(--tx2);font-size:11px">'
+          +(e.star!==undefined?'★ '+e.star:'')
+          +(e.ratings!==undefined?'　'+e.ratings+' 评论':'')
+          +'</span>';
+      } else {
+        statusHtml='<span style="color:var(--red);font-size:11px;font-weight:600;flex-shrink:0">✗ 失败</span>';
+        detailHtml='<span style="color:var(--tx3);font-size:11px">'+esc(e.reason||'未知原因')+'</span>';
+      }
+      return '<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-bottom:1px solid var(--bor-soft);font-size:11px">'
+        +statusHtml
+        +'<span style="font-family:\'JetBrains Mono\',monospace;color:var(--tx);flex-shrink:0">'+esc(e.asin)+'</span>'
+        +'<span style="flex:1;min-width:0">'+detailHtml+'</span>'
+        +'<span style="color:var(--tx3);font-size:10px;flex-shrink:0">'+ts+'</span>'
+        +'</div>';
+    }).join('');
+    body.innerHTML=head+rows;
+  }
+  openMo('mo-rating-log');
+}
+
 // Kick off the trickle ~30 seconds after app loads (let UI settle first)
 setTimeout(function(){
   if(_isElectronEnv())startRatingTrickle();
 },30000);
 
 
+
+// ════════════════════════════════════════════════════════════════
+// 待分配区 (Inbox / Unassigned zone)
+// ════════════════════════════════════════════════════════════════
+function updateInboxBadge(){
+  var cnt=q('tab-inbox-cnt');
+  if(cnt){
+    if(UNASSIGNED.length){cnt.textContent=UNASSIGNED.length;cnt.style.display='';}
+    else{cnt.style.display='none';}
+  }
+}
+
+function renderInbox(){
+  var grid=q('inbox-grid'),empty=q('inbox-empty'),meta=q('inbox-meta');
+  if(!grid)return;
+  updateInboxBadge();
+  if(!UNASSIGNED.length){
+    grid.innerHTML='';
+    if(empty)empty.style.display='';
+    if(meta)meta.textContent='';
+    q('inbox-toolbar').style.display='none';
+    return;
+  }
+  if(empty)empty.style.display='none';
+  if(meta)meta.textContent=UNASSIGNED.length+' 个产品待分配';
+  var noImg=UNASSIGNED.filter(function(p){return !(p.img||getImg(p.asin));}).length;
+  if(meta&&noImg)meta.textContent+=' · '+noImg+' 个缺图';
+
+  var html=UNASSIGNED.map(function(p){
+    var aa=encodeURIComponent(p.asin);
+    var isSel=_inboxSel.has(p.asin);
+    var img=p.img||getImg(p.asin)||'';
+    return '<div class="pc'+(isSel?' sel-card':'')+'" data-asin="'+esc(p.asin)+'">'
+      +'<label class="p-chk"><input type="checkbox" data-action="inbox-sel" data-asin="'+aa+'"'+(isSel?' checked':'')+' style="cursor:pointer"></label>'
+      +'<div class="p-img" data-asin="'+esc(p.asin)+'">'+(img?'<img src="'+esc(img)+'" style="width:100%;height:100%;object-fit:contain">':'<span class="p-img-ph">📦</span>')+'</div>'
+      +'<div class="p-body">'
+        +'<div style="margin-bottom:4px">'
+          +(p.new_sku?'<span class="p-sku" style="font-size:11px;font-weight:700;color:#15803d;background:#dcfce7;border-color:#86efac" data-action="copy-sku" data-sku="'+encodeURIComponent(p.new_sku)+'">'+esc(p.new_sku)+'</span>'
+            :(p.sku?'<span class="p-sku" data-action="copy-sku" data-sku="'+encodeURIComponent(p.sku)+'">'+esc(p.sku)+'</span>':'<span class="p-sku-ph">—</span>'))
+        +'</div>'
+        +'<div style="font-size:11.5px;color:var(--tx2);font-family:\'JetBrains Mono\',monospace;margin-bottom:3px">'+esc(p.asin)+'</div>'
+        +(p.price?'<div class="p-price">£'+esc(String(p.price))+'</div>':'<div style="font-size:11px;color:var(--tx3)">价格未知</div>')
+        +'<div style="display:flex;gap:6px;margin-top:6px">'
+          +'<button class="btn-c" data-action="inbox-fetch" data-asin="'+aa+'" style="font-size:9.5px;flex:1">抓图</button>'
+          +'<button class="btn-c" data-action="inbox-assign-one" data-asin="'+aa+'" style="font-size:9.5px;flex:1;color:var(--accent);border-color:var(--accent-bor)">分配</button>'
+        +'</div>'
+      +'</div>'
+    +'</div>';
+  }).join('');
+  grid.innerHTML=html;
+  updateInboxToolbar();
+}
+
+function updateInboxToolbar(){
+  var tb=q('inbox-toolbar');
+  if(!tb)return;
+  if(_inboxSel.size){
+    tb.style.display='flex';
+    q('inbox-sel-count').textContent='已选 '+_inboxSel.size+' 个';
+  } else {
+    tb.style.display='none';
+  }
+}
+function clearInboxSelection(){
+  _inboxSel=new Set();
+  renderInbox();
+}
+
+// Inbox card click delegation
+document.addEventListener('click',function(e){
+  var t=e.target.closest('[data-action]');
+  if(!t)return;
+  var action=t.getAttribute('data-action');
+  var asin=t.dataset.asin?decodeURIComponent(t.dataset.asin):null;
+  if(action==='inbox-sel'){
+    if(t.checked)_inboxSel.add(asin);else _inboxSel.delete(asin);
+    var card=t.closest('.pc');if(card)card.classList.toggle('sel-card',t.checked);
+    updateInboxToolbar();
+  } else if(action==='inbox-fetch'){
+    inboxFetchOne(asin);
+  } else if(action==='inbox-assign-one'){
+    _inboxSel=new Set([asin]);
+    openAssignModal();
+  }
+},false);
+
+// Fetch image for one inbox product
+function inboxFetchOne(asin){
+  var p=UNASSIGNED.find(function(x){return x.asin===asin;});
+  if(!p)return;
+  if(p.img||getImg(asin)){
+    if(!confirm('该产品已有图片，确定重新抓取覆盖吗？'))return;
+  }
+  toast('正在抓取 '+asin+' 的主图…');
+  fetchAmazonImg(asin).then(function(url){
+    if(url){
+      p.img=url;
+      if(typeof IMGS!=='undefined')IMGS[asin]=url;
+      if(typeof scheduleImgFlush==='function')scheduleImgFlush();
+      markDirty();save();renderInbox();
+      toast('✓ '+asin+' 主图已抓取');
+    } else {
+      toast('✗ '+asin+' 没抓到图片');
+    }
+  }).catch(function(){toast('✗ '+asin+' 抓图出错');});
+}
+
+// Batch fetch images for inbox products missing images
+function batchFetchInboxImgs(){
+  var targets=UNASSIGNED.filter(function(p){return !(p.img||getImg(p.asin));});
+  if(!targets.length){toast('待分配区没有缺图的产品');return;}
+  if(!confirm('将为 '+targets.length+' 个缺图产品抓取主图，预计需要一些时间。开始吗？'))return;
+  var i=0,ok=0;
+  function next(){
+    if(i>=targets.length){
+      markDirty();save();renderInbox();
+      toast('抓图完成：成功 '+ok+' / '+targets.length);
+      return;
+    }
+    var asin=targets[i].asin;
+    toast('抓图中 '+(i+1)+'/'+targets.length+'…');
+    fetchAmazonImg(asin).then(function(url){
+      if(url){
+        targets[i].img=url;
+        if(typeof IMGS!=='undefined')IMGS[asin]=url;
+        ok++;
+      }
+      i++;setTimeout(next,1200);
+    }).catch(function(){i++;setTimeout(next,1200);});
+  }
+  next();
+}
+
+// ── Assign workflow ─────────────────────────────────────────────
+function openAssignModal(){
+  if(!_inboxSel.size){toast('请先勾选要分配的产品');return;}
+  var cats=Object.keys(DATA);
+  var catSel=q('assign-cat');
+  catSel.innerHTML=cats.length
+    ? cats.map(function(c){return '<option value="'+esc(c)+'">'+esc(c)+'</option>';}).join('')
+    : '<option value="">（还没有大类，请在下方新建）</option>';
+  onAssignCatChange();
+  q('assign-sub').textContent='把所选 '+_inboxSel.size+' 个产品归入大类 / 小类';
+  q('assign-new-cat').value='';
+  q('assign-new-sub').value='';
+  openMo('mo-assign');
+}
+function onAssignCatChange(){
+  var cat=q('assign-cat').value;
+  var subSel=q('assign-sub-sel');
+  if(cat&&DATA[cat]){
+    var subs=Object.keys(DATA[cat]);
+    subSel.innerHTML=subs.length
+      ? subs.map(function(s){return '<option value="'+esc(s)+'">'+esc(s)+'</option>';}).join('')
+      : '<option value="">（该大类下还没有小类，请在下方新建）</option>';
+  } else {
+    subSel.innerHTML='<option value="">（请先选择或新建大类）</option>';
+  }
+}
+function assignCreateCat(){
+  var name=(q('assign-new-cat').value||'').trim();
+  if(!name){toast('请输入新大类名称');return;}
+  if(DATA[name]){toast('大类「'+name+'」已存在');return;}
+  DATA[name]={};
+  markDirty();save();buildSidebar();
+  // refresh modal selects
+  var catSel=q('assign-cat');
+  catSel.innerHTML=Object.keys(DATA).map(function(c){return '<option value="'+esc(c)+'"'+(c===name?' selected':'')+'>'+esc(c)+'</option>';}).join('');
+  onAssignCatChange();
+  q('assign-new-cat').value='';
+  toast('✓ 已创建大类「'+name+'」');
+}
+function assignCreateSub(){
+  var cat=q('assign-cat').value;
+  if(!cat||!DATA[cat]){toast('请先选择一个大类');return;}
+  var name=(q('assign-new-sub').value||'').trim();
+  if(!name){toast('请输入新小类名称');return;}
+  if(DATA[cat][name]){toast('小类「'+name+'」已存在');return;}
+  DATA[cat][name]=[];
+  markDirty();save();buildSidebar();
+  var subSel=q('assign-sub-sel');
+  subSel.innerHTML=Object.keys(DATA[cat]).map(function(s){return '<option value="'+esc(s)+'"'+(s===name?' selected':'')+'>'+esc(s)+'</option>';}).join('');
+  q('assign-new-sub').value='';
+  toast('✓ 已在「'+cat+'」下创建小类「'+name+'」');
+}
+function confirmAssign(){
+  var cat=q('assign-cat').value;
+  var sub=q('assign-sub-sel').value;
+  if(!cat||!DATA[cat]){toast('请选择大类');return;}
+  if(!sub||!DATA[cat][sub]){toast('请选择小类');return;}
+  var moved=0;
+  var remaining=[];
+  UNASSIGNED.forEach(function(p){
+    if(_inboxSel.has(p.asin)){
+      // Avoid dup: skip if asin already in target DATA somewhere
+      var exists=findItem(p.asin);
+      if(exists.cat){
+        remaining.push(p);  // already in library, leave in inbox for user to handle
+        return;
+      }
+      p.category=cat;p.subcat=sub;
+      DATA[cat][sub].push(p);
+      moved++;
+    } else {
+      remaining.push(p);
+    }
+  });
+  UNASSIGNED=remaining;
+  _inboxSel=new Set();
+  closeMo('mo-assign');
+  markDirty();save();
+  buildSidebar();renderInbox();updateStats();
+  toast('✓ 已分配 '+moved+' 个产品到「'+cat+' › '+sub+'」');
+}
+
+// ── Import target choice ────────────────────────────────────────
+var _pendingImportText=null,_pendingImportType=null;
+function confirmImportTarget(target){
+  closeMo('mo-import-target');
+  if(target==='inbox'){
+    _importToInbox(_pendingImportText,_pendingImportType);
+  } else {
+    if(_pendingImportType==='json')importJson(_pendingImportText);
+    else importProductCsv(_pendingImportText);
+  }
+  _pendingImportText=null;_pendingImportType=null;
+}
+
+function _importToInbox(text,type){
+  var added=0,skipped=0;
+  function addRow(asin,fields){
+    asin=(asin||'').replace(/[^A-Z0-9]/gi,'').toUpperCase();
+    if(!asin||asin.length<10)return;
+    if(UNASSIGNED.some(function(p){return p.asin===asin;})){skipped++;return;}
+    if(findItem(asin).cat){skipped++;return;}  // already in library
+    var p={asin:asin};
+    if(fields.sku)p.sku=fields.sku;
+    if(fields.new_sku)p.new_sku=fields.new_sku;
+    if(fields.price)p.price=fields.price;
+    if(fields.star)p.star=fields.star;
+    if(fields.ratings)p.ratings=fields.ratings;
+    if(fields.img)p.img=fields.img;
+    UNASSIGNED.push(p);
+    added++;
+  }
+  if(type==='json'){
+    try{
+      var d=JSON.parse(text);
+      var src=d.DATA||d;
+      Object.keys(src).forEach(function(c){
+        if(typeof src[c]!=='object')return;
+        Object.keys(src[c]).forEach(function(s){
+          if(!Array.isArray(src[c][s]))return;
+          src[c][s].forEach(function(it){
+            addRow(it.asin,{sku:it.sku,new_sku:it.new_sku,price:it.price,star:it.star,ratings:it.ratings,img:it.img});
+          });
+        });
+      });
+    }catch(e){toast('JSON 解析失败');return;}
+  } else {
+    // CSV
+    var lines=text.split(/\r?\n/).filter(function(l){return l.trim();});
+    if(lines.length<2){toast('文件为空');return;}
+    function pr(line){var c=[],cur='',q2=false;for(var i=0;i<line.length;i++){var ch=line[i];if(ch==='"')q2=!q2;else if(ch===','&&!q2){c.push(cur.trim());cur='';}else cur+=ch;}c.push(cur.trim());return c;}
+    var hdr=pr(lines[0]).map(function(h){return h.replace(/^\uFEFF/,'').trim().toLowerCase();});
+    function col(kws){for(var j=0;j<hdr.length;j++){for(var k=0;k<kws.length;k++){if(hdr[j].includes(kws[k]))return j;}}return -1;}
+    var iA=col(['asin']),iSK=col(['sku']),iNS=col(['新货号','new_sku']),iP=col(['价格','price']),iST=col(['星级','star','rating']),iR=col(['评论','review']);
+    if(iA<0){toast('未找到 ASIN 列');return;}
+    lines.slice(1).forEach(function(line){
+      var c=pr(line);
+      addRow(c[iA],{
+        sku:iSK>=0?c[iSK]:null,
+        new_sku:iNS>=0?c[iNS]:null,
+        price:iP>=0?parseFloat((c[iP]||'').replace(/[^0-9.]/g,''))||null:null,
+        star:iST>=0?parseFloat(c[iST]||'')||null:null,
+        ratings:iR>=0?parseInt((c[iR]||'').replace(/[^0-9]/g,''))||null:null
+      });
+    });
+  }
+  markDirty();save();
+  renderInbox();updateInboxBadge();
+  switchTab('inbox');
+  toast('✓ 已导入 '+added+' 个产品到待分配区'+(skipped?'（跳过 '+skipped+' 个重复/已存在）':''));
+}
+
 // ════════════════════════════════════════════════════════════════
 // 更新日志 (Changelog)
 // 每次发新版，在 CHANGELOG 数组最前面加一条即可。
 // ════════════════════════════════════════════════════════════════
-var APP_VERSION='3.3.2';
+var APP_VERSION='3.4.0';
 // 标题栏自动显示当前版本号（跟随 APP_VERSION，不用手动改）
 try{ document.title = 'Tangzon 产品管理 v' + APP_VERSION; }catch(e){}
 var CHANGELOG=[
+  {
+    v:'3.4.0', date:'2026-05-25',
+    notes:[
+      '新增：待分配区 — 导入产品可先进缓冲区，之后再归类',
+      '新增：导入时可选择「导入到待分配区」或「按文件类目直接导入」',
+      '新增：待分配区支持勾选批量分配，分配时可当场新建大类/小类',
+      '新增：待分配区可单个/批量抓图',
+      '新增：星级抓取记录查看（设置里 / 命令面板 / 点状态栏进度）',
+      '可看到每个 ASIN 抓取成功或失败、抓到的星级和评论数'
+    ]
+  },
+  {
+    v:'3.3.3', date:'2026-05-25',
+    notes:[
+      '修复：重启 / 更新后细分类型列表消失的问题（根因找到了）',
+      '原因是启动时没有读取已保存的细分类型，现已修复',
+      '修复后细分类型会在重启 / 更新后正常保留'
+    ]
+  },
   {
     v:'3.3.2', date:'2026-05-25',
     notes:[
@@ -4802,12 +5261,14 @@ function renderCmdPalette(qStr){
     {sec:'导航',label:'切到 关注',hint:'Ctrl+2',ico:'star',fn:function(){switchTab('watch');}},
     {sec:'导航',label:'切到 活动池',hint:'Ctrl+3',ico:'target',fn:function(){switchTab('promo');}},
     {sec:'导航',label:'切到 淘汰库',hint:'Ctrl+4',ico:'trash',fn:function(){switchTab('retired');}},
+    {sec:'导航',label:'切到 待分配区',hint:'',ico:'box',fn:function(){switchTab('inbox');}},
     {sec:'操作',label:'立即导出 JSON 备份',hint:'Ctrl+S',ico:'save',fn:function(){if(typeof exportJson==='function')exportJson();}},
     {sec:'操作',label:'切换 管理模式',hint:'Ctrl+E',ico:'edit',fn:function(){if(typeof toggleEdit==='function')toggleEdit();}},
     {sec:'操作',label:'批量抓取主图',hint:'',ico:'image',fn:function(){if(typeof batchAutoFetchImgs==='function')batchAutoFetchImgs();}},
     {sec:'操作',label:'新建活动',hint:'',ico:'plus',fn:function(){if(typeof openCreatePromo==='function'){switchTab('promo');setTimeout(openCreatePromo,200);}}},
     {sec:'外观',label:'切换 深色/浅色 模式',hint:'',ico:'sun',fn:toggleDarkMode},
     {sec:'其他',label:'查看更新日志',hint:'',ico:'box',fn:function(){if(typeof showChangelog==='function')showChangelog();}},
+    {sec:'其他',label:'星级抓取记录',hint:'',ico:'star',fn:function(){if(typeof showRatingLog==='function')showRatingLog();}},
     {sec:'外观',label:'卡片密度 紧凑',hint:'',ico:'grid',fn:function(){setDensity('compact');}},
     {sec:'外观',label:'卡片密度 默认',hint:'',ico:'grid',fn:function(){setDensity('default');}},
     {sec:'外观',label:'卡片密度 详细',hint:'',ico:'grid',fn:function(){setDensity('detailed');}}

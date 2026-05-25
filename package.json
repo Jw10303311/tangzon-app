@@ -1,6 +1,6 @@
 {
   "name": "tangzon-product-manager",
-  "version": "3.3.2",
+  "version": "3.4.0",
   "description": "Tangzon 产品管理桌面版",
   "main": "main.js",
   "scripts": {
