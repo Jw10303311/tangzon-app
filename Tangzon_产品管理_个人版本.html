@@ -140,6 +140,7 @@ a{color:inherit;text-decoration:none;}
 .t-drop-above{box-shadow:inset 0 2px 0 var(--accent);}
 .t-drop-below{box-shadow:inset 0 -2px 0 var(--accent);}
 .t-hd.t-drop-above,.t-hd.t-drop-below{background:var(--accent-bg);box-shadow:inset 0 0 0 2px var(--accent);}
+.t-sub.t-prod-drop{background:var(--accent-bg);box-shadow:inset 0 0 0 2px var(--accent);border-radius:5px;}
 .t-drag-handle{display:none;color:var(--tx3);font-size:11px;margin-right:2px;cursor:grab;flex-shrink:0;user-select:none;}
 .edit-mode .t-drag-handle{display:inline;}
 .edit-mode .t-drag-handle:hover{color:var(--accent);}
@@ -2120,6 +2121,7 @@ function setupDnd(){
       sub:el.dataset.dragSub?decodeURIComponent(el.dataset.dragSub):null,
       el:el
     };
+    window._internalDragActive=true;  // REQ1
     el.classList.add('t-drag-ghost');
     try{ev.dataTransfer.effectAllowed='move';ev.dataTransfer.setData('text/plain','');}catch(e){}
   });
@@ -2176,6 +2178,60 @@ function setupDnd(){
     _clearDropMarkers();
     if(_dragInfo&&_dragInfo.el)_dragInfo.el.classList.remove('t-drag-ghost');
     _dragInfo=null;
+  });
+
+  // REQ2: accept product-card drags dropped onto a sub-category node
+  tree.addEventListener('dragover',function(ev){
+    // Only when a PRODUCT (not a sidebar node) is being dragged
+    if(_dragInfo)return;  // sidebar node drag — handled above
+    if(!_dragSrcAsin)return;  // no product drag in progress
+    var subEl=ev.target.closest&&ev.target.closest('.t-sub[data-sub]');
+    if(!subEl)return;
+    var dsub=subEl.dataset.sub;
+    if(!dsub||dsub==='__all__')return;  // can't drop onto 全部
+    ev.preventDefault();
+    try{ev.dataTransfer.dropEffect='move';}catch(e){}
+    document.querySelectorAll('.t-sub.t-prod-drop').forEach(function(n){n.classList.remove('t-prod-drop');});
+    subEl.classList.add('t-prod-drop');
+  });
+  tree.addEventListener('dragleave',function(ev){
+    if(_dragInfo)return;
+    var subEl=ev.target.closest&&ev.target.closest('.t-sub');
+    if(subEl)subEl.classList.remove('t-prod-drop');
+  });
+  tree.addEventListener('drop',function(ev){
+    if(_dragInfo)return;  // sidebar node drop — handled above
+    if(!_dragSrcAsin)return;
+    var subEl=ev.target.closest&&ev.target.closest('.t-sub[data-sub]');
+    if(!subEl)return;
+    var dstCat=decodeURIComponent(subEl.dataset.cat||'');
+    var dstSub=subEl.dataset.sub;
+    if(!dstSub||dstSub==='__all__'){return;}
+    if(dstSub)dstSub=decodeURIComponent(dstSub);
+    ev.preventDefault();
+    document.querySelectorAll('.t-sub.t-prod-drop').forEach(function(n){n.classList.remove('t-prod-drop');});
+    if(!DATA[dstCat]||!DATA[dstCat][dstSub]){toast('目标小类不存在');_dragSrcAsin=null;_dragGroup=[];return;}
+    // Determine which products to move: the drag group (multi-select) or just one
+    var asins=(_dragGroup&&_dragGroup.length)?_dragGroup.slice():[_dragSrcAsin];
+    var moved=0;
+    snapshotForUndo();
+    asins.forEach(function(asin){
+      var loc=findItem(asin);
+      if(!loc.cat)return;
+      if(loc.cat===dstCat&&loc.sub===dstSub)return;  // already there
+      var it=DATA[loc.cat][loc.sub].splice(loc.idx,1)[0];
+      if(!it)return;
+      it.subcat=dstSub;
+      DATA[dstCat][dstSub].push(it);
+      moved++;
+    });
+    _dragSrcAsin=null;_dragGroup=[];
+    window._internalDragActive=false;
+    if(moved){
+      _selAsins=new Set();
+      markDirty();buildSidebar();renderGrid();updateStats();
+      toast('✓ 已移动 '+moved+' 个产品到「'+dstCat+' › '+dstSub+'」');
+    }
   });
 }
 
@@ -2728,6 +2784,7 @@ function initCardDrag(grid){
   grid.addEventListener('dragstart',function(e){
     var card=e.target.closest('.pc[data-drag-asin]');
     if(!card)return;
+    window._internalDragActive=true;  // REQ1: suppress import overlay
     _dragSrcAsin=card.getAttribute('data-asin');
     // REQ5: if the dragged card is part of a multi-selection, drag the whole group
     if(_selAsins&&_selAsins.size>1&&_selAsins.has(_dragSrcAsin)){
@@ -2747,6 +2804,7 @@ function initCardDrag(grid){
   });
   grid.addEventListener('dragend',function(e){
     grid.querySelectorAll('.pc').forEach(function(c){c.style.opacity='';});
+    window._internalDragActive=false;  // REQ1
   });
   grid.addEventListener('dragover',function(e){
     e.preventDefault();
@@ -4392,6 +4450,7 @@ function _applyImgs(){
   function hasFiles(e){return e.dataTransfer&&Array.from(e.dataTransfer.types||[]).indexOf('Files')>=0;}
 
   document.addEventListener('dragenter',function(e){
+    if(window._internalDragActive)return;  // REQ1: ignore internal card/sub drags
     if(!hasFiles(e))return;
     e.preventDefault();
     dragCounter++;
@@ -4405,6 +4464,7 @@ function _applyImgs(){
     }
   });
   document.addEventListener('dragover',function(e){
+    if(window._internalDragActive)return;  // REQ1
     if(hasFiles(e)){e.preventDefault();e.dataTransfer.dropEffect='copy';}
   });
   document.addEventListener('dragleave',function(e){
@@ -4417,6 +4477,7 @@ function _applyImgs(){
     }
   });
   document.addEventListener('drop',function(e){
+    if(window._internalDragActive){window._internalDragActive=false;return;}  // REQ1
     if(!hasFiles(e))return;
     e.preventDefault();
     dragCounter=0;
@@ -5086,10 +5147,18 @@ function _importToInbox(text,type){
 // 更新日志 (Changelog)
 // 每次发新版，在 CHANGELOG 数组最前面加一条即可。
 // ════════════════════════════════════════════════════════════════
-var APP_VERSION='3.4.2';
+var APP_VERSION='3.4.3';
 // 标题栏自动显示当前版本号（跟随 APP_VERSION，不用手动改）
 try{ document.title = 'Tangzon 产品管理 v' + APP_VERSION; }catch(e){}
 var CHANGELOG=[
+  {
+    v:'3.4.3', date:'2026-05-26',
+    notes:[
+      '修复：在软件内部拖动产品时，不再误触发全屏导入遮罩（只有从电脑外部拖文件进来才显示）',
+      '新增：产品卡可以直接拖到左侧类目树的小类上，实现跨小类移动',
+      '新增：跨小类拖动支持多选 — 勾选多个产品后一起拖到目标小类'
+    ]
+  },
   {
     v:'3.4.2', date:'2026-05-26',
     notes:[
