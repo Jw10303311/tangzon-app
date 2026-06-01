@@ -17,6 +17,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   readFile: (filePath) => ipcRenderer.invoke('read-file', filePath),
   openExternal: (url) => ipcRenderer.invoke('open-external', url),
   checkUpdates: () => ipcRenderer.invoke('check-updates'),
+  setAlwaysOnTop: (on) => ipcRenderer.invoke('set-always-on-top', on),
+  getAlwaysOnTop: () => ipcRenderer.invoke('get-always-on-top'),
   getAppVersion: () => ipcRenderer.invoke('get-app-version'),
   onImportFile: (callback) => ipcRenderer.on('import-file', (event, payload) => callback(payload))
 });
