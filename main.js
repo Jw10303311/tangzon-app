@@ -75,7 +75,7 @@ function createWindow(showImmediately = true) {
   mainWindow = new BrowserWindow({
     alwaysOnTop: !!_cfgInit.alwaysOnTop,
     width: 1400, height: 900, minWidth: 1024, minHeight: 640,
-    title: 'Tangzon 产品管理',
+    title: 'Tangzon 产品管理 v' + app.getVersion(),
     backgroundColor: '#f8fafc',
     show: showImmediately,
     webPreferences: {
@@ -241,18 +241,6 @@ function buildMenu() {
     { label: '编辑', submenu: [ { role: 'undo', label: '撤销' }, { role: 'redo', label: '重做' }, { type: 'separator' }, { role: 'cut', label: '剪切' }, { role: 'copy', label: '复制' }, { role: 'paste', label: '粘贴' }, { role: 'selectAll', label: '全选' } ] },
     { label: '视图', submenu: [ { role: 'zoomIn', label: '放大' }, { role: 'zoomOut', label: '缩小' }, { role: 'resetZoom', label: '默认大小' }, { type: 'separator' }, { role: 'togglefullscreen', label: '全屏切换' }, { type: 'separator' }, { label: '开发者工具', accelerator: 'F12', click: () => { if (mainWindow) mainWindow.webContents.toggleDevTools(); } } ] },
     { label: '帮助', submenu: [
-      {
-        label: '窗口置顶',
-        type: 'checkbox',
-        checked: !!loadConfig().alwaysOnTop,
-        click: (item) => {
-          if (mainWindow) {
-            mainWindow.setAlwaysOnTop(item.checked);
-            try { const cfg = loadConfig(); cfg.alwaysOnTop = item.checked; saveConfig(cfg); } catch(e){}
-          }
-        }
-      },
-      { type: 'separator' },
       { label: '检查更新...', click: () => checkForUpdates(false) },
       { label: '更新日志', click: () => { showMainWindow(); mainWindow.webContents.executeJavaScript(`if(typeof showChangelog==='function')showChangelog();`); } },
       { type: 'separator' },

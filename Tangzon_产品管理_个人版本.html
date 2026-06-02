@@ -64,6 +64,9 @@ a{color:inherit;text-decoration:none;}
 .hd-sv{font-family:"JetBrains Mono",monospace;font-size:15px;font-weight:600;color:var(--tx);line-height:1.1;letter-spacing:-.02em;}
 .hd-sl{font-size:9.5px;color:var(--tx3);text-transform:uppercase;letter-spacing:.09em;margin-top:3px;font-weight:500;}
 .hd-right{display:flex;align-items:center;gap:6px;flex-shrink:0;}
+#btn-pin-window:hover{border-color:var(--accent)!important;color:var(--accent)!important;background:var(--accent-bg)!important;}
+#btn-pin-window.pinned{background:var(--accent)!important;color:#fff!important;border-color:var(--accent)!important;}
+#btn-pin-window.pinned:hover{background:var(--accent-2)!important;}
 .hd-tabs{display:flex;background:var(--sur2);border:1px solid var(--bor);border-radius:9px;padding:3px;gap:1px;}
 .hd-tab{padding:6px 14px;border-radius:6px;font-size:12px;cursor:pointer;color:var(--tx2);border:none;background:transparent;font-family:inherit;font-weight:500;transition:all .15s var(--easing);white-space:nowrap;letter-spacing:-.005em;}
 .hd-tab:hover{color:var(--tx);}
@@ -514,6 +517,9 @@ body.dark .cpal{background:rgba(0,0,0,.7);}
       <button class="hd-tab" id="tab-retired" onclick="switchTab('retired')">淘汰</button>
       <button class="hd-tab" id="tab-inbox" onclick="switchTab('inbox')">待分配<span id="tab-inbox-cnt" style="margin-left:4px;font-family:'JetBrains Mono',monospace;font-size:9.5px;background:var(--accent-bg);color:var(--accent);padding:1px 6px;border-radius:99px;display:none">0</span></button>
     </div>
+    <button id="btn-pin-window" onclick="togglePinWindow()" title="窗口置顶 — 点击让窗口始终在最前" style="display:none;margin-left:10px;width:32px;height:32px;border:1px solid var(--bor);background:var(--sur);border-radius:8px;cursor:pointer;color:var(--tx3);transition:all .15s;align-items:center;justify-content:center;padding:0;flex-shrink:0">
+      <svg id="pin-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="17" x2="12" y2="22"/><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z"/></svg>
+    </button>
   </div>
 </div>
 
@@ -979,6 +985,16 @@ body.dark .cpal{background:rgba(0,0,0,.7);}
       <div style="font-weight:600;font-size:13px;color:var(--tx)">按文件里的大类/小类直接导入</div>
       <div style="font-size:11px;color:var(--tx3);margin-top:3px">文件已包含正确的大类/小类列时用这个。</div>
     </button>
+  </div>
+</div></div>
+
+<!-- Rating fetch completion result modal -->
+<div class="mo" id="mo-rating-result"><div class="md" style="width:380px">
+  <button class="md-x" onclick="closeMo('mo-rating-result')">✕</button>
+  <div id="rating-result-body"></div>
+  <div class="fa">
+    <button class="btn-c" onclick="closeMo('mo-rating-result')">关闭</button>
+    <button class="btn-ok" onclick="closeMo('mo-rating-result');showRatingLog()">查看详细记录</button>
   </div>
 </div></div>
 
@@ -4689,38 +4705,83 @@ function toggleDarkMode(){
 // ── Status bar updater ──────────────────────────────────────────
 
 
-// REQ1: Auto-scroll while dragging — when cursor is near top/bottom of window,
-// scroll the main content area automatically so user can reach a far-away drop target.
+// REQ2 FIX: Robust auto-scroll while dragging.
+// Previous version didn't reliably scroll during multi-product drag.
+// New: listen on document AND window with capture, use any drag-related event
+// that carries clientY, and always preventDefault on dragover so the loop continues.
 (function(){
-  var _autoScrollRAF=null;
-  var _autoScrollDir=0;
-  function _scrollContainer(){
-    return document.querySelector('.main')||document.scrollingElement||document.documentElement;
+  var _rafId=null;
+  var _dir=0;
+  var _speed=0;
+  var _lastY=0;
+
+  function _scrollPage(amount){
+    // Try window scroll first
+    var sx=window.pageYOffset, sy;
+    window.scrollBy(0, amount);
+    sy=window.pageYOffset;
+    if(sy!==sx)return true;
+    // Try document element
+    var de=document.documentElement;
+    sx=de.scrollTop;
+    de.scrollTop+=amount;
+    if(de.scrollTop!==sx)return true;
+    // Try .main as last resort
+    var m=document.querySelector('.main');
+    if(m){sx=m.scrollTop;m.scrollTop+=amount;return m.scrollTop!==sx;}
+    return false;
   }
-  function _autoScrollStep(){
-    if(!_autoScrollDir){_autoScrollRAF=null;return;}
-    var sc=_scrollContainer();
-    sc.scrollTop+=_autoScrollDir*16;
-    _autoScrollRAF=requestAnimationFrame(_autoScrollStep);
+
+  function _tick(){
+    if(!_dir){_rafId=null;return;}
+    _scrollPage(_dir*_speed);
+    _rafId=requestAnimationFrame(_tick);
   }
-  document.addEventListener('dragover',function(e){
-    if(!window._internalDragActive)return;
-    var EDGE=80;  // px from window edge that triggers scroll
+
+  function _updateFromY(clientY){
+    if(!window._internalDragActive){_dir=0;return;}
+    var EDGE=120;
     var h=window.innerHeight;
-    var newDir=0;
-    if(e.clientY<EDGE)newDir=-1;
-    else if(e.clientY>h-EDGE)newDir=1;
-    if(newDir!==_autoScrollDir){
-      _autoScrollDir=newDir;
-      if(_autoScrollDir&&!_autoScrollRAF){_autoScrollRAF=requestAnimationFrame(_autoScrollStep);}
+    var newDir=0,speed=0;
+    if(clientY<EDGE){
+      newDir=-1;
+      speed=Math.ceil((EDGE-clientY)/EDGE*24);
+    } else if(clientY>h-EDGE){
+      newDir=1;
+      speed=Math.ceil((clientY-(h-EDGE))/EDGE*24);
     }
-  });
-  function _stopScroll(){
-    _autoScrollDir=0;
-    if(_autoScrollRAF){cancelAnimationFrame(_autoScrollRAF);_autoScrollRAF=null;}
+    _speed=Math.max(4, speed);
+    if(newDir!==_dir){
+      _dir=newDir;
+      if(_dir&&!_rafId){_rafId=requestAnimationFrame(_tick);}
+    }
   }
-  document.addEventListener('dragend',_stopScroll);
-  document.addEventListener('drop',_stopScroll);
+
+  // Multiple listeners — at least one will fire reliably during HTML5 drag.
+  // CRITICAL: preventDefault on dragover so the drag isn't cancelled and events keep firing.
+  function onDragOver(e){
+    if(!window._internalDragActive)return;
+    e.preventDefault();
+    _lastY=e.clientY;
+    _updateFromY(e.clientY);
+  }
+  document.addEventListener('dragover', onDragOver, true);  // capture phase
+  window.addEventListener('dragover', onDragOver, true);
+
+  // dragenter/dragexit also carry clientY — use as additional triggers
+  document.addEventListener('dragenter', function(e){
+    if(!window._internalDragActive)return;
+    _lastY=e.clientY;
+    _updateFromY(e.clientY);
+  }, true);
+
+  function _stop(){
+    _dir=0;
+    if(_rafId){cancelAnimationFrame(_rafId);_rafId=null;}
+  }
+  document.addEventListener('dragend', _stop, true);
+  document.addEventListener('drop', _stop, true);
+  window.addEventListener('mouseup', _stop);  // safety
 })();
 
 // ════════════════════════════════════════════════════════════════
@@ -4879,6 +4940,52 @@ function startRatingTrickle(){
       if(el)setTimeout(function(){el.style.display='none';},5000);
     }
 
+    function showCompletionResult(){
+      var failN=idx-ok;
+      var msg='✓ 星级抓取完成：成功 '+ok+' / 共 '+idx+(failN>0?'，失败 '+failN:'');
+      // 1) Status bar — keep visible with completion summary (no auto-hide)
+      var el=q('sb-rating-progress');
+      if(el){
+        el.style.display='';
+        el.innerHTML='<span style="color:var(--green)">✓ 抓取完成</span> '+ok+'成功'+(failN>0?' / '+failN+'失败':'')+' · 点击查看详情';
+        el.style.cursor='pointer';
+        // Auto-hide after 30 seconds (not 5)
+        setTimeout(function(){if(el)el.style.display='none';},30000);
+      }
+      // 2) Persistent in-app result modal (only if there was meaningful activity)
+      if(idx>0){
+        try{
+          var resultModal=q('mo-rating-result');
+          if(resultModal){
+            var failN2=idx-ok;
+            var details='今日已抓取 '+idx+' 个产品';
+            if(ok===idx&&idx>0)details+='，全部成功 ✓';
+            else if(ok>0)details+='：成功 '+ok+' 个，失败 '+failN2+' 个';
+            else details+='，全部失败（可能被反爬拦截）';
+            q('rating-result-body').innerHTML='<div style="text-align:center;padding:18px 12px">'
+              +'<div style="font-size:36px;margin-bottom:8px">'+(ok===idx?'🎉':(ok>0?'📊':'⚠️'))+'</div>'
+              +'<div style="font-weight:600;color:var(--tx);font-size:14px;margin-bottom:6px">星级抓取完成</div>'
+              +'<div style="color:var(--tx2);font-size:12px;margin-bottom:14px">'+details+'</div>'
+              +'<div style="display:flex;justify-content:center;gap:24px;padding:12px;background:var(--sur2);border-radius:8px">'
+              +'<div><div style="font-size:22px;font-weight:700;color:var(--green);font-family:\'JetBrains Mono\',monospace">'+ok+'</div><div style="font-size:10.5px;color:var(--tx3);margin-top:2px">成功</div></div>'
+              +'<div><div style="font-size:22px;font-weight:700;color:'+(failN2>0?'var(--red)':'var(--tx3)')+';font-family:\'JetBrains Mono\',monospace">'+failN2+'</div><div style="font-size:10.5px;color:var(--tx3);margin-top:2px">失败</div></div>'
+              +'<div><div style="font-size:22px;font-weight:700;color:var(--tx);font-family:\'JetBrains Mono\',monospace">'+idx+'</div><div style="font-size:10.5px;color:var(--tx3);margin-top:2px">总计</div></div>'
+              +'</div>'
+              +'</div>';
+            openMo('mo-rating-result');
+          }
+        }catch(e){}
+        // 3) Electron desktop notification (background even if window not focused)
+        try{
+          if(window.electronAPI&&window.electronAPI.sendNotification){
+            window.electronAPI.sendNotification('Tangzon 星级抓取完成', msg);
+          }
+        }catch(e){}
+        // 4) Inline toast as fallback
+        toast(msg);
+      }
+    }
+
     function next(){
       if(_ratingJob.cancelled||idx>=targets.length){
         _ratingJob.running=false;
@@ -4886,7 +4993,7 @@ function startRatingTrickle(){
         st.doneToday+=idx;
         _saveRatingState(st);
         if(ok>0){markDirty();save();renderGrid();}
-        updateBar();hideBar();
+        showCompletionResult();
         return;
       }
       var asin=targets[idx];
@@ -4987,6 +5094,33 @@ setTimeout(function(){
 },30000);
 
 
+
+
+// REQ1: Window pin toggle button (top-right of header)
+function togglePinWindow(){
+  if(!window.electronAPI||!window.electronAPI.setAlwaysOnTop)return;
+  window.electronAPI.getAlwaysOnTop().then(function(cur){
+    var newState=!cur;
+    window.electronAPI.setAlwaysOnTop(newState).then(function(){
+      _updatePinButton(newState);
+      toast(newState?'✓ 窗口已置顶':'已取消置顶');
+    });
+  });
+}
+function _updatePinButton(on){
+  var btn=document.getElementById('btn-pin-window');
+  if(!btn)return;
+  btn.classList.toggle('pinned',!!on);
+  btn.title=on?'窗口已置顶（点击取消）':'窗口置顶 — 点击让窗口始终在最前';
+}
+// Initialize on load — show button only in Electron, set initial state
+setTimeout(function(){
+  if(window.electronAPI&&window.electronAPI.getAlwaysOnTop){
+    var btn=document.getElementById('btn-pin-window');
+    if(btn){btn.style.display='inline-flex';}
+    window.electronAPI.getAlwaysOnTop().then(_updatePinButton).catch(function(){});
+  }
+},300);
 
 // ════════════════════════════════════════════════════════════════
 // 待分配区 (Inbox / Unassigned zone)
@@ -5467,10 +5601,38 @@ function exportPromoAmazonCsv(promoId){
 // 更新日志 (Changelog)
 // 每次发新版，在 CHANGELOG 数组最前面加一条即可。
 // ════════════════════════════════════════════════════════════════
-var APP_VERSION='3.4.3';
+var APP_VERSION='3.5.2';
 // 标题栏自动显示当前版本号（跟随 APP_VERSION，不用手动改）
 try{ document.title = 'Tangzon 产品管理 v' + APP_VERSION; }catch(e){}
 var CHANGELOG=[
+  {
+    v:'3.5.2', date:'2026-06-02',
+    notes:[
+      '新增：星级抓取完成后弹窗反馈结果（成功多少 / 失败多少）',
+      '优化：状态栏抓取完成提示从 5 秒延长到 30 秒，且显示完整结果',
+      '优化：抓取完成会同时显示系统桌面通知（即使切到其他软件也能看到）'
+    ]
+  },
+  {
+    v:'3.5.1', date:'2026-06-02',
+    notes:[
+      '修复：之前版本 (3.5.0) 标题栏和更新日志没显示新版本号的问题（根因找到并修复）',
+      '新增：窗口置顶按钮 — 在右上角，点击置顶 / 再点取消',
+      '修复：勾选多个产品后拖动时无法自动滚动页面的问题',
+      '清理：去掉了帮助菜单里冗余的"窗口置顶"项（已用图标按钮代替）'
+    ]
+  },
+  {
+    v:'3.5.0', date:'2026-06-01',
+    notes:[
+      '新增：拖动产品时鼠标靠近窗口顶/底，页面自动滚动',
+      '新增：星级抓取支持指定范围（全部 / 某大类 / 某小类）',
+      '新增：星级抓取支持指定顺序（最久没更新 / 销量高 / 评分低）',
+      '新增：窗口置顶（这版加了图标按钮在右上角）',
+      '新增：批量添加 ASIN/SKU 到活动 — 粘贴一堆，一键加入',
+      '新增：活动池产品按 Amazon 提报模板导出 Excel'
+    ]
+  },
   {
     v:'3.4.3', date:'2026-05-26',
     notes:[
