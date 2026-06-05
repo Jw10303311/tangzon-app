@@ -820,6 +820,9 @@ body.dark .cpal{background:rgba(0,0,0,.7);}
         </select>
       </div>
     </div>
+    <div style="margin-top:8px;text-align:right">
+      <button onclick="previewRatingTargets()" style="background:transparent;border:0;color:var(--accent);font-size:11px;cursor:pointer;text-decoration:underline;font-family:inherit;padding:0">预览今日会抓哪些产品 →</button>
+    </div>
   </div>
   <div style="margin-top:14px;padding:10px;background:var(--accent-bg);border-radius:7px;font-size:11px;color:var(--tx2);line-height:1.6">
     💡 <b>提示</b>：拖放 .json/.xlsx/.csv 文件到窗口可直接导入。拖图片到产品卡（管理模式下）会替换该产品图片。
@@ -989,12 +992,12 @@ body.dark .cpal{background:rgba(0,0,0,.7);}
 </div></div>
 
 <!-- Rating fetch completion result modal -->
-<div class="mo" id="mo-rating-result"><div class="md" style="width:380px">
+<div class="mo" id="mo-rating-result"><div class="md" style="width:520px;max-height:85vh;display:flex;flex-direction:column">
   <button class="md-x" onclick="closeMo('mo-rating-result')">✕</button>
-  <div id="rating-result-body"></div>
+  <div id="rating-result-body" style="overflow-y:auto;flex:1;margin-right:-6px;padding-right:6px"></div>
   <div class="fa">
     <button class="btn-c" onclick="closeMo('mo-rating-result')">关闭</button>
-    <button class="btn-ok" onclick="closeMo('mo-rating-result');showRatingLog()">查看详细记录</button>
+    <button class="btn-ok" onclick="closeMo('mo-rating-result');showRatingLog()">查看完整历史</button>
   </div>
 </div></div>
 
@@ -4454,7 +4457,6 @@ function _applyImgs(){
       if(nb)nb.checked=!!s.notifyBackup;
       if(ar)ar.checked=!!s.autoRating;
       if(sc){
-        // build scope options: 全部 + each cat + each cat|sub
         var opts=['<option value="all">全部产品</option>'];
         Object.keys(DATA||{}).forEach(function(c){
           opts.push('<option value="cat::'+esc(c)+'">'+esc(c)+'（整个大类）</option>');
@@ -4463,9 +4465,20 @@ function _applyImgs(){
           });
         });
         sc.innerHTML=opts.join('');
-        sc.value=s.ratingScope||'all';
+        // FIX: prefer Electron config, fall back to localStorage if missing
+        var savedScope=s.ratingScope;
+        if(!savedScope||savedScope==='all'){
+          try{var ls=localStorage.getItem('tz3_rating_scope');if(ls)savedScope=ls;}catch(e){}
+        }
+        sc.value=savedScope||'all';
+        // If saved value doesn't exist in current options (cat/sub was renamed/deleted), reset to 'all'
+        if(sc.value!==(savedScope||'all'))sc.value='all';
       }
-      if(so)so.value=s.ratingOrder||'oldest';
+      if(so){
+        var savedOrder=s.ratingOrder;
+        if(!savedOrder){try{var lo=localStorage.getItem('tz3_rating_order');if(lo)savedOrder=lo;}catch(e){}}
+        so.value=savedOrder||'oldest';
+      }
     });
   }
   var origOpenMo=window.openMo;
@@ -4485,8 +4498,16 @@ function _applyImgs(){
       ratingOrder:document.getElementById('set-rating-order')?document.getElementById('set-rating-order').value:'oldest'
     };
     var wasAutoRating=updates.autoRating;
+    // FIX: also persist scope/order to localStorage as fallback
+    try{
+      localStorage.setItem('tz3_rating_scope',updates.ratingScope||'all');
+      localStorage.setItem('tz3_rating_order',updates.ratingOrder||'oldest');
+    }catch(e){}
     window.electronAPI.saveSettings(updates).then(function(){
-      toast('✓ 设置已保存');
+      var scopeLabel=updates.ratingScope==='all'?'全部产品':
+        (updates.ratingScope.indexOf('cat::')===0?updates.ratingScope.slice(5)+'（整个大类）':
+         updates.ratingScope.indexOf('sub::')===0?updates.ratingScope.slice(5).replace('::',' › '):'未知');
+      toast('✓ 设置已保存 · 抓取范围：'+scopeLabel);
       closeMo('mo-app-settings');
       // If user just enabled auto-rating, kick off the trickle now
       if(wasAutoRating&&typeof startRatingTrickle==='function'){
@@ -4928,60 +4949,119 @@ function startRatingTrickle(){
     _ratingJob.cancelled=false;
     var idx=0,ok=0;
 
-    function updateBar(){
+    var _attemptDetails=[];  // [{asin, oldStar, newStar, oldRatings, newRatings, ok, reason, sku, img, t}]
+
+    function updateBar(currentAsin){
       var el=q('sb-rating-progress');
       if(el){
         el.style.display='';
-        el.textContent='星级更新 '+idx+'/'+targets.length+' 今日';
+        var label='星级更新 '+idx+'/'+targets.length;
+        if(currentAsin)label+=' · 正在抓 '+currentAsin;
+        el.textContent=label;
       }
     }
     function hideBar(){
-      var el=q('sb-rating-progress');
-      if(el)setTimeout(function(){el.style.display='none';},5000);
+      // do not auto-hide while running; only completion path manages visibility
     }
 
     function showCompletionResult(){
       var failN=idx-ok;
       var msg='✓ 星级抓取完成：成功 '+ok+' / 共 '+idx+(failN>0?'，失败 '+failN:'');
-      // 1) Status bar — keep visible with completion summary (no auto-hide)
-      var el=q('sb-rating-progress');
-      if(el){
-        el.style.display='';
-        el.innerHTML='<span style="color:var(--green)">✓ 抓取完成</span> '+ok+'成功'+(failN>0?' / '+failN+'失败':'')+' · 点击查看详情';
-        el.style.cursor='pointer';
-        // Auto-hide after 30 seconds (not 5)
-        setTimeout(function(){if(el)el.style.display='none';},30000);
+      // 1) Status bar — show completion summary, keep 30 seconds
+      var sbEl=q('sb-rating-progress');
+      if(sbEl){
+        sbEl.style.display='';
+        sbEl.innerHTML='<span style="color:var(--green)">✓ 抓取完成</span> '+ok+'成功'+(failN>0?' / '+failN+'失败':'')+' · 点击看详情';
+        sbEl.style.cursor='pointer';
+        setTimeout(function(){if(sbEl)sbEl.style.display='none';},30000);
       }
-      // 2) Persistent in-app result modal (only if there was meaningful activity)
+      // 2) Detailed result modal with per-product thumbnails and deltas
       if(idx>0){
         try{
-          var resultModal=q('mo-rating-result');
-          if(resultModal){
-            var failN2=idx-ok;
-            var details='今日已抓取 '+idx+' 个产品';
-            if(ok===idx&&idx>0)details+='，全部成功 ✓';
-            else if(ok>0)details+='：成功 '+ok+' 个，失败 '+failN2+' 个';
-            else details+='，全部失败（可能被反爬拦截）';
-            q('rating-result-body').innerHTML='<div style="text-align:center;padding:18px 12px">'
-              +'<div style="font-size:36px;margin-bottom:8px">'+(ok===idx?'🎉':(ok>0?'📊':'⚠️'))+'</div>'
-              +'<div style="font-weight:600;color:var(--tx);font-size:14px;margin-bottom:6px">星级抓取完成</div>'
-              +'<div style="color:var(--tx2);font-size:12px;margin-bottom:14px">'+details+'</div>'
-              +'<div style="display:flex;justify-content:center;gap:24px;padding:12px;background:var(--sur2);border-radius:8px">'
-              +'<div><div style="font-size:22px;font-weight:700;color:var(--green);font-family:\'JetBrains Mono\',monospace">'+ok+'</div><div style="font-size:10.5px;color:var(--tx3);margin-top:2px">成功</div></div>'
-              +'<div><div style="font-size:22px;font-weight:700;color:'+(failN2>0?'var(--red)':'var(--tx3)')+';font-family:\'JetBrains Mono\',monospace">'+failN2+'</div><div style="font-size:10.5px;color:var(--tx3);margin-top:2px">失败</div></div>'
-              +'<div><div style="font-size:22px;font-weight:700;color:var(--tx);font-family:\'JetBrains Mono\',monospace">'+idx+'</div><div style="font-size:10.5px;color:var(--tx3);margin-top:2px">总计</div></div>'
-              +'</div>'
-              +'</div>';
-            openMo('mo-rating-result');
+          var failN2=idx-ok;
+          var titleEmoji=(ok===idx)?'🎉':(ok>0?'📊':'⚠️');
+          var details='今日已抓取 '+idx+' 个产品';
+          if(ok===idx&&idx>0)details+='，全部成功 ✓';
+          else if(ok>0)details+='：成功 '+ok+' 个，失败 '+failN2+' 个';
+          else details+='，全部失败（可能被反爬拦截）';
+
+          // Build per-product rows (success first, then failures)
+          var successRows=[],failRows=[];
+          _attemptDetails.forEach(function(d){
+            var imgHtml=d.img
+              ? '<img src="'+esc(d.img)+'" style="width:42px;height:42px;object-fit:contain;background:#fff;border:1px solid var(--bor);border-radius:6px;flex-shrink:0" onerror="this.style.display=\'none\'">'
+              : '<div style="width:42px;height:42px;background:var(--sur2);border:1px solid var(--bor);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">📦</div>';
+            var asinHtml='<span style="font-family:\'JetBrains Mono\',monospace;font-size:11px;color:var(--tx)">'+esc(d.asin)+'</span>';
+            var skuHtml=d.sku?'<span style="font-size:10.5px;color:var(--tx3);margin-left:4px">'+esc(d.sku)+'</span>':'';
+            if(d.ok){
+              // Delta display
+              var starHtml='';
+              var oldS=(d.oldStar==null||d.oldStar==='')?'—':parseFloat(d.oldStar).toFixed(1);
+              var newS=(d.newStar==null||d.newStar==='')?'—':parseFloat(d.newStar).toFixed(1);
+              var delta='';
+              if(d.oldStar!=null&&d.newStar!=null){
+                var diff=+(d.newStar-d.oldStar).toFixed(2);
+                if(diff>0.001)delta='<span style="color:var(--green);font-size:10px;margin-left:4px">↑'+diff.toFixed(2)+'</span>';
+                else if(diff<-0.001)delta='<span style="color:var(--red);font-size:10px;margin-left:4px">↓'+Math.abs(diff).toFixed(2)+'</span>';
+              } else if(d.oldStar==null&&d.newStar!=null){
+                delta='<span style="color:var(--green);font-size:10px;margin-left:4px">新</span>';
+              }
+              starHtml='<span style="color:var(--tx3)">★</span> <span style="color:var(--tx3)">'+oldS+'</span> → <span style="font-weight:600;color:var(--tx)">'+newS+'</span>'+delta;
+              var ratingsHtml='';
+              if(d.oldRatings!=null||d.newRatings!=null){
+                var oldR=(d.oldRatings==null)?'—':d.oldRatings;
+                var newR=(d.newRatings==null)?'—':d.newRatings;
+                ratingsHtml='<span style="color:var(--tx3);font-size:10.5px;margin-left:8px">'+oldR+' → '+newR+' 评论</span>';
+              }
+              successRows.push('<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-bottom:1px solid var(--bor-soft)">'
+                +imgHtml
+                +'<div style="flex:1;min-width:0">'
+                  +'<div style="display:flex;align-items:center;gap:4px;margin-bottom:2px">'+asinHtml+skuHtml+'</div>'
+                  +'<div style="font-size:11px">'+starHtml+ratingsHtml+'</div>'
+                +'</div>'
+                +'<span style="color:var(--green);font-size:11px;font-weight:600;flex-shrink:0">✓</span>'
+              +'</div>');
+            } else {
+              failRows.push('<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-bottom:1px solid var(--bor-soft);opacity:.75">'
+                +imgHtml
+                +'<div style="flex:1;min-width:0">'
+                  +'<div style="display:flex;align-items:center;gap:4px;margin-bottom:2px">'+asinHtml+skuHtml+'</div>'
+                  +'<div style="font-size:10.5px;color:var(--red)">'+esc(d.reason||'失败')+'</div>'
+                +'</div>'
+                +'<span style="color:var(--red);font-size:11px;font-weight:600;flex-shrink:0">✗</span>'
+              +'</div>');
+            }
+          });
+
+          var listHtml='';
+          if(successRows.length){
+            listHtml+='<div style="font-size:10.5px;color:var(--tx3);font-weight:600;padding:6px 10px;background:var(--sur2);border-radius:6px 6px 0 0;border-bottom:1px solid var(--bor)">成功更新 '+successRows.length+' 个</div>';
+            listHtml+=successRows.join('');
           }
-        }catch(e){}
-        // 3) Electron desktop notification (background even if window not focused)
+          if(failRows.length){
+            listHtml+='<div style="font-size:10.5px;color:var(--tx3);font-weight:600;padding:6px 10px;background:var(--sur2);border-top:1px solid var(--bor);border-bottom:1px solid var(--bor)">失败 '+failRows.length+' 个</div>';
+            listHtml+=failRows.join('');
+          }
+
+          q('rating-result-body').innerHTML=
+            '<div style="text-align:center;padding:16px 12px 12px">'
+              +'<div style="font-size:32px;margin-bottom:4px">'+titleEmoji+'</div>'
+              +'<div style="font-weight:600;color:var(--tx);font-size:14px;margin-bottom:4px">星级抓取完成</div>'
+              +'<div style="color:var(--tx2);font-size:11.5px;margin-bottom:10px">'+esc(details)+'</div>'
+              +'<div style="display:flex;justify-content:center;gap:24px;padding:10px;background:var(--sur2);border-radius:8px">'
+                +'<div><div style="font-size:22px;font-weight:700;color:var(--green);font-family:\'JetBrains Mono\',monospace">'+ok+'</div><div style="font-size:10.5px;color:var(--tx3);margin-top:2px">成功</div></div>'
+                +'<div><div style="font-size:22px;font-weight:700;color:'+(failN2>0?'var(--red)':'var(--tx3)')+';font-family:\'JetBrains Mono\',monospace">'+failN2+'</div><div style="font-size:10.5px;color:var(--tx3);margin-top:2px">失败</div></div>'
+                +'<div><div style="font-size:22px;font-weight:700;color:var(--tx);font-family:\'JetBrains Mono\',monospace">'+idx+'</div><div style="font-size:10.5px;color:var(--tx3);margin-top:2px">总计</div></div>'
+              +'</div>'
+            +'</div>'
+            +(listHtml?'<div style="border:1px solid var(--bor);border-radius:8px;overflow:hidden;margin-top:8px">'+listHtml+'</div>':'');
+          openMo('mo-rating-result');
+        }catch(e){console.error(e);}
         try{
           if(window.electronAPI&&window.electronAPI.sendNotification){
             window.electronAPI.sendNotification('Tangzon 星级抓取完成', msg);
           }
         }catch(e){}
-        // 4) Inline toast as fallback
         toast(msg);
       }
     }
@@ -4997,7 +5077,19 @@ function startRatingTrickle(){
         return;
       }
       var asin=targets[idx];
-      updateBar();
+      // Capture BEFORE values for delta display
+      var _locPre=findItem(asin);
+      var _detail={asin:asin,ok:false,t:Date.now()};
+      if(_locPre.cat){
+        var _itPre=DATA[_locPre.cat][_locPre.sub][_locPre.idx];
+        if(_itPre){
+          _detail.oldStar=_itPre.star;
+          _detail.oldRatings=_itPre.ratings;
+          _detail.sku=_itPre.new_sku||_itPre.sku||'';
+          _detail.img=_itPre.img||(typeof getImg==='function'?getImg(asin):null);
+        }
+      }
+      updateBar(asin);
       fetchAmazonRating(asin).then(function(res){
         var logEntry={asin:asin,time:Date.now(),ok:false};
         if(res&&(res.star!==undefined||res.ratings!==undefined)){
@@ -5005,7 +5097,6 @@ function startRatingTrickle(){
           if(loc.cat){
             var it=DATA[loc.cat][loc.sub][loc.idx];
             if(it){
-              // REQ7 confirm A: overwrite with scraped value
               if(res.star!==undefined)it.star=res.star;
               if(res.ratings!==undefined)it.ratings=res.ratings;
               it.ratingFetchedAt=Date.now();
@@ -5019,12 +5110,17 @@ function startRatingTrickle(){
               logEntry.star=res.star;
               logEntry.ratings=res.ratings;
               logEntry.name=it.new_sku||it.sku||'';
+              _detail.ok=true;
+              _detail.newStar=res.star;
+              _detail.newRatings=res.ratings;
             }
           }
         } else {
           _setRatingFetchedAt(asin);
           logEntry.reason=(res&&res.error==='robot_check')?'被反爬拦截':'页面没解析到数据';
+          _detail.reason=logEntry.reason;
         }
+        _attemptDetails.push(_detail);
         _pushRatingLog(logEntry);
         idx++;
         // 25 second gap between requests to avoid anti-bot
@@ -5601,10 +5697,19 @@ function exportPromoAmazonCsv(promoId){
 // 更新日志 (Changelog)
 // 每次发新版，在 CHANGELOG 数组最前面加一条即可。
 // ════════════════════════════════════════════════════════════════
-var APP_VERSION='3.5.2';
+var APP_VERSION='3.5.3';
 // 标题栏自动显示当前版本号（跟随 APP_VERSION，不用手动改）
 try{ document.title = 'Tangzon 产品管理 v' + APP_VERSION; }catch(e){}
 var CHANGELOG=[
+  {
+    v:'3.5.3', date:'2026-06-02',
+    notes:[
+      '修复：星级抓取范围 / 顺序 选完保存后，再次打开设置又重置成默认（根因：getSettings 没返回这两个字段）',
+      '增强：抓取完成弹窗现在显示每个产品的缩略图 + 旧星级 → 新星级 + 升降箭头',
+      '增强：抓取完成弹窗按"成功 / 失败"分组，失败显示具体原因',
+      '增强：抓取过程中状态栏实时显示"正在抓 [ASIN]"，能看到当前在抓哪个'
+    ]
+  },
   {
     v:'3.5.2', date:'2026-06-02',
     notes:[

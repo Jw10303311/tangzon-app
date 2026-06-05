@@ -64,6 +64,8 @@ function getSettings() {
     notifyBackup: cfg.notifyBackup !== false,
     minToTray: cfg.minToTray !== false,
     autoRating: cfg.autoRating || false,
+    ratingScope: cfg.ratingScope || 'all',
+    ratingOrder: cfg.ratingOrder || 'oldest',
     closeToTrayShown: cfg.closeToTrayShown || false
   };
 }
