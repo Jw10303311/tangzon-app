@@ -740,7 +740,7 @@ body.dark .cpal{background:rgba(0,0,0,.7);}
   <div class="md-sub" id="mo-promo-batch-sub"></div>
   <div class="fg" style="margin-top:8px">
     <label class="fl">粘贴 ASIN 或 SKU（每行一个，可混用）</label>
-    <textarea class="fi" id="inp-promo-batch-list" rows="8" placeholder="B0CT5KR3GV&#10;NP12079&#10;B0H1QKD9B1&#10;..." style="font-family:'JetBrains Mono',monospace;font-size:12px;resize:vertical"></textarea>
+    <textarea class="fi" id="inp-promo-batch-list" rows="8" placeholder="支持任意分隔方式：&#10;&#10;竖排：&#10;B0CT5KR3GV&#10;NP12079&#10;&#10;横排：&#10;B0CT5KR3GV  NP12079  B0H1QKD9B1&#10;&#10;或逗号 / Tab 分隔均可" style="font-family:'JetBrains Mono',monospace;font-size:12px;resize:vertical"></textarea>
   </div>
   <div class="fr" style="margin-top:8px">
     <div class="fg" style="flex:1">
@@ -847,12 +847,14 @@ body.dark .cpal{background:rgba(0,0,0,.7);}
 
 
     <div id="v-inbox" style="display:none">
-      <div class="dash-hd" style="margin-bottom:14px">
-        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-          <div class="dash-title">待分配产品</div>
-          <span id="inbox-meta" style="font-size:11px;color:var(--tx3)"></span>
+      <div style="margin-bottom:14px">
+        <div class="dash-hd" style="margin-bottom:6px">
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+            <div class="dash-title">待分配产品</div>
+            <span id="inbox-meta" style="font-size:11px;color:var(--tx3)"></span>
+          </div>
         </div>
-        <p style="font-size:11px;color:var(--tx3);margin-top:4px">导入但还未归类的产品。抓好图后，勾选产品分配到你自己的大类/小类。</p>
+        <p style="font-size:11px;color:var(--tx3);margin:0">导入但还未归类的产品。抓好图后，勾选产品分配到你自己的大类/小类。</p>
       </div>
       <div id="inbox-toolbar" style="display:none;align-items:center;gap:10px;padding:8px 12px;background:var(--accent-bg);border-radius:8px;margin-bottom:12px;flex-wrap:wrap">
         <span style="font-size:11px;color:var(--accent);font-weight:600" id="inbox-sel-count">已选 0 个</span>
@@ -975,18 +977,23 @@ body.dark .cpal{background:rgba(0,0,0,.7);}
 </div></div>
 
 <!-- Import target choice modal -->
-<div class="mo" id="mo-import-target"><div class="md" style="width:400px">
+<div class="mo" id="mo-import-target"><div class="md" style="width:440px">
   <button class="md-x" onclick="closeMo('mo-import-target')">✕</button>
   <div class="md-title">导入方式</div>
   <div class="md-sub">选择产品导入到哪里</div>
   <div style="margin-top:10px;display:flex;flex-direction:column;gap:8px">
     <button onclick="confirmImportTarget('inbox')" style="text-align:left;padding:12px 14px;background:var(--sur2);border:1px solid var(--bor);border-radius:8px;cursor:pointer;font-family:inherit">
-      <div style="font-weight:600;font-size:13px;color:var(--tx)">导入到待分配区</div>
-      <div style="font-size:11px;color:var(--tx3);margin-top:3px">产品先进待分配区，之后自己归类。适合类目和模板不一致时。</div>
+      <div style="font-weight:600;font-size:13px;color:var(--tx)">📥 导入到待分配区（推荐）</div>
+      <div style="font-size:11px;color:var(--tx3);margin-top:3px;line-height:1.5">
+        只需要 <b>ASIN</b> 一列即可。其他列（sku / 新货号 / 价格 / 星级 / 评论数 / 大类 / 小类 / 备注 / 等级）有就读，没有就跳过。<br>
+        产品先进待分配区，抓好图后再自己归类。
+      </div>
     </button>
     <button onclick="confirmImportTarget('direct')" style="text-align:left;padding:12px 14px;background:var(--sur2);border:1px solid var(--bor);border-radius:8px;cursor:pointer;font-family:inherit">
-      <div style="font-weight:600;font-size:13px;color:var(--tx)">按文件里的大类/小类直接导入</div>
-      <div style="font-size:11px;color:var(--tx3);margin-top:3px">文件已包含正确的大类/小类列时用这个。</div>
+      <div style="font-weight:600;font-size:13px;color:var(--tx)">📁 按文件里的大类/小类直接导入</div>
+      <div style="font-size:11px;color:var(--tx3);margin-top:3px;line-height:1.5">
+        文件**必须**有"大类"和"小类"列且填好。产品按这两列直接归类，不进待分配区。
+      </div>
     </button>
   </div>
 </div></div>
@@ -1628,7 +1635,7 @@ function fetchAmazonImg(asin){
       if(isElectron){
         // Electron: direct fetch (no CORS), much faster + more reliable
         if(debug)console.log('[fetchImg] '+asin+': CDN failed, trying direct fetch (Electron)…');
-        var domains=['amazon.co.uk','amazon.com','amazon.de'];
+        var domains=['amazon.co.uk'];  // UK seller only — other regions are unrelated listings
         var di=0;
         function tryDirect(){
           if(di>=domains.length){
@@ -4830,28 +4837,66 @@ function _extractRatingFromHtml(htmlText){
   if(!htmlText||htmlText.length<2000)return null;
   if(/Robot Check|api-services-support@amazon/i.test(htmlText))return {error:'robot_check'};
   var result={};
-  // Star rating patterns
-  var starPats=[
-    /<span[^>]*class=["'][^"']*a-icon-alt[^"']*["'][^>]*>([0-9.]+)\s*out of 5/i,
-    /data-hook=["']rating-out-of-text["'][^>]*>([0-9.]+)\s*out of 5/i,
-    /([0-9.]+)\s*out of 5 stars/i,
-    /"ratingValue"\s*:\s*"?([0-9.]+)"?/i
+
+  // ── Step 1: locate the primary product rating block ──────────
+  // Amazon's product header has a div with id="averageCustomerReviews" or
+  // an element with class "a-popover-trigger" near the title. We extract
+  // a 500-char window starting from the most specific anchor available,
+  // then run the star regex ONLY in that window — this stops "5 stars"
+  // text from filter UI or related products from polluting the match.
+  var anchors=[
+    /id=["']averageCustomerReviews["']/i,
+    /id=["']acrPopover["']/i,
+    /data-hook=["']rating-out-of-text["']/i
   ];
-  for(var i=0;i<starPats.length;i++){
-    var m=htmlText.match(starPats[i]);
-    if(m&&m[1]){var v=parseFloat(m[1]);if(v>0&&v<=5){result.star=v;break;}}
+  var window500=null;
+  for(var a=0;a<anchors.length;a++){
+    var am=htmlText.match(anchors[a]);
+    if(am&&am.index!==undefined){
+      window500=htmlText.substr(am.index, 800);  // 800-char window
+      break;
+    }
   }
-  // Review count patterns
+
+  // ── Step 2: extract star ONLY from that window (strict) ──────
+  if(window500){
+    var starPats=[
+      /<i[^>]*class=["'][^"']*a-icon-star[^"']*["'][^>]*>\s*<span[^>]*class=["'][^"']*a-icon-alt[^"']*["'][^>]*>([0-9.]+)\s*out of 5/i,
+      /<span[^>]*class=["'][^"']*a-icon-alt[^"']*["'][^>]*>([0-9.]+)\s*out of 5/i,
+      /([0-9.]+)\s*out of 5/i
+    ];
+    for(var i=0;i<starPats.length;i++){
+      var m=window500.match(starPats[i]);
+      if(m&&m[1]){
+        var v=parseFloat(m[1]);
+        if(v>=1&&v<=5){result.star=v;break;}
+      }
+    }
+  }
+
+  // ── Step 3: extract review count from the full page ──────────
+  // acrCustomerReviewText is unique to the product header
   var revPats=[
     /id=["']acrCustomerReviewText["'][^>]*>([0-9,]+)\s*(ratings|reviews|global ratings)/i,
-    /data-hook=["']total-review-count["'][^>]*>([0-9,]+)/i,
-    /([0-9,]+)\s*global ratings/i,
-    /"reviewCount"\s*:\s*"?([0-9,]+)"?/i
+    /data-hook=["']total-review-count["'][^>]*>\s*<span[^>]*>([0-9,]+)/i,
+    /data-hook=["']total-review-count["'][^>]*>([0-9,]+)/i
   ];
   for(var j=0;j<revPats.length;j++){
     var rm=htmlText.match(revPats[j]);
-    if(rm&&rm[1]){var rv=parseInt(rm[1].replace(/,/g,''));if(rv>=0){result.ratings=rv;break;}}
+    if(rm&&rm[1]){
+      var rv=parseInt(rm[1].replace(/,/g,''));
+      if(rv>=0&&rv<10000000){result.ratings=rv;break;}
+    }
   }
+
+  // ── Step 4: sanity check — reject false positives ────────────
+  // A product with 0 reviews can't have a star rating. If we got star but
+  // no review count (or zero reviews), the star is almost certainly
+  // a false positive from filter UI / related products.
+  if(result.star!==undefined&&(result.ratings===undefined||result.ratings===0)){
+    delete result.star;
+  }
+
   if(result.star!==undefined||result.ratings!==undefined)return result;
   return null;
 }
@@ -4861,7 +4906,7 @@ function fetchAmazonRating(asin){
   if(!_isElectronEnv())return Promise.resolve(null);
   asin=asin.trim().toUpperCase();
   if(!/^[A-Z0-9]{10,12}$/.test(asin))return Promise.resolve(null);
-  var domains=['amazon.co.uk','amazon.com','amazon.de'];
+  var domains=['amazon.co.uk'];  // UK seller only — other regions are unrelated listings
   var di=0;
   function tryNext(){
     if(di>=domains.length)return Promise.resolve(null);
@@ -5358,8 +5403,38 @@ function openAssignModal(){
   catSel.innerHTML=cats.length
     ? cats.map(function(c){return '<option value="'+esc(c)+'">'+esc(c)+'</option>';}).join('')
     : '<option value="">（还没有大类，请在下方新建）</option>';
+  // REQ1: If selected products have an original cat/sub from import, pre-select it
+  var hints={};
+  Array.from(_inboxSel).forEach(function(asin){
+    var p=UNASSIGNED.find(function(x){return x.asin===asin;});
+    if(p&&p._origCat){
+      var k=p._origCat+(p._origSub?'|'+p._origSub:'');
+      hints[k]=(hints[k]||0)+1;
+    }
+  });
+  var hintKeys=Object.keys(hints);
+  var subText='把所选 '+_inboxSel.size+' 个产品归入大类 / 小类';
+  if(hintKeys.length===1){
+    var parts=hintKeys[0].split('|');
+    var hCat=parts[0],hSub=parts[1];
+    subText+='　·　来自文件提示：'+esc(hCat)+(hSub?' › '+esc(hSub):'');
+    // Pre-select if cat exists in DATA
+    if(DATA[hCat]){
+      catSel.value=hCat;
+    }
+  } else if(hintKeys.length>1){
+    subText+='　·　来自文件提示：多个类目，请手动选择';
+  }
+  q('assign-sub').innerHTML=subText;
   onAssignCatChange();
-  q('assign-sub').textContent='把所选 '+_inboxSel.size+' 个产品归入大类 / 小类';
+  // If hint sub exists in DATA, pre-select it too
+  if(hintKeys.length===1){
+    var parts2=hintKeys[0].split('|');
+    var hCat2=parts2[0],hSub2=parts2[1];
+    if(hSub2&&DATA[hCat2]&&DATA[hCat2][hSub2]){
+      q('assign-sub-sel').value=hSub2;
+    }
+  }
   q('assign-new-cat').value='';
   q('assign-new-sub').value='';
   openMo('mo-assign');
@@ -5459,6 +5534,11 @@ function _importToInbox(text,type){
     if(fields.star)p.star=fields.star;
     if(fields.ratings)p.ratings=fields.ratings;
     if(fields.img)p.img=fields.img;
+    // REQ1: store original cat/sub as a hint for later assignment (if file had these)
+    if(fields.origCat)p._origCat=fields.origCat;
+    if(fields.origSub)p._origSub=fields.origSub;
+    if(fields.note)p.note=fields.note;
+    if(fields.grade)p.grade=fields.grade;
     UNASSIGNED.push(p);
     added++;
   }
@@ -5471,7 +5551,7 @@ function _importToInbox(text,type){
         Object.keys(src[c]).forEach(function(s){
           if(!Array.isArray(src[c][s]))return;
           src[c][s].forEach(function(it){
-            addRow(it.asin,{sku:it.sku,new_sku:it.new_sku,price:it.price,star:it.star,ratings:it.ratings,img:it.img});
+            addRow(it.asin,{sku:it.sku,new_sku:it.new_sku,price:it.price,star:it.star,ratings:it.ratings,img:it.img,origCat:c,origSub:s,note:it.note,grade:it.grade});
           });
         });
       });
@@ -5483,8 +5563,9 @@ function _importToInbox(text,type){
     function pr(line){var c=[],cur='',q2=false;for(var i=0;i<line.length;i++){var ch=line[i];if(ch==='"')q2=!q2;else if(ch===','&&!q2){c.push(cur.trim());cur='';}else cur+=ch;}c.push(cur.trim());return c;}
     var hdr=pr(lines[0]).map(function(h){return h.replace(/^\uFEFF/,'').trim().toLowerCase();});
     function col(kws){for(var j=0;j<hdr.length;j++){for(var k=0;k<kws.length;k++){if(hdr[j].includes(kws[k]))return j;}}return -1;}
-    var iA=col(['asin']),iSK=col(['sku']),iNS=col(['新货号','new_sku']),iP=col(['价格','price']),iST=col(['星级','star','rating']),iR=col(['评论','review']);
-    if(iA<0){toast('未找到 ASIN 列');return;}
+    var iA=col(['asin']),iSK=col(['sku']),iNS=col(['新货号','new_sku','newsku']),iP=col(['价格','price']),iST=col(['星级','star','rating']),iR=col(['评论','review']);
+    var iCat=col(['大类','category','cat']),iSub=col(['小类','子类','subcat','subcategory']),iNote=col(['备注','note','notes']),iGrade=col(['等级','grade']);
+    if(iA<0){toast('未找到 ASIN 列。请确认文件首行有"ASIN"列名');return;}
     lines.slice(1).forEach(function(line){
       var c=pr(line);
       addRow(c[iA],{
@@ -5492,7 +5573,11 @@ function _importToInbox(text,type){
         new_sku:iNS>=0?c[iNS]:null,
         price:iP>=0?parseFloat((c[iP]||'').replace(/[^0-9.]/g,''))||null:null,
         star:iST>=0?parseFloat(c[iST]||'')||null:null,
-        ratings:iR>=0?parseInt((c[iR]||'').replace(/[^0-9]/g,''))||null:null
+        ratings:iR>=0?parseInt((c[iR]||'').replace(/[^0-9]/g,''))||null:null,
+        origCat:iCat>=0?(c[iCat]||'').trim()||null:null,
+        origSub:iSub>=0?(c[iSub]||'').trim()||null:null,
+        note:iNote>=0?(c[iNote]||'').trim()||null:null,
+        grade:iGrade>=0?(c[iGrade]||'').trim().toUpperCase()||null:null
       });
     });
   }
@@ -5518,7 +5603,9 @@ function openBatchAddToPromo(promoId){
 
 function _parsePromoBatch(){
   var raw=q('inp-promo-batch-list').value||'';
-  var lines=raw.split(/[\r\n,;\t]+/).map(function(x){return x.trim();}).filter(Boolean);
+  // REQ3: handle both vertical (newline) and horizontal (space/comma/tab/semicolon) layouts
+  // Also strip common quote chars from Excel paste
+  var lines=raw.split(/[\s,;|]+/).map(function(x){return x.replace(/^["'\u201c\u201d\u2018\u2019]+|["'\u201c\u201d\u2018\u2019]+$/g,'').trim();}).filter(Boolean);
   var seen={},uniq=[];
   lines.forEach(function(l){var k=l.toUpperCase();if(!seen[k]){seen[k]=1;uniq.push(l);}});
   return uniq;
@@ -5645,8 +5732,8 @@ function exportPromoAmazonFormat(promoId){
   var prods=p.products||[];
   if(!prods.length){toast('该活动下没有产品');return;}
   if(typeof XLSX==='undefined'){toast('Excel 模块未加载，使用 CSV 导出');return exportPromoAmazonCsv(promoId);}
-  // Build rows
-  var headers=['上架货号','活动数量','RRP','发布价','店铺佣金率','广告费率','税费率','折扣率','活动价','活动返利','备注'];
+  // Build rows — NEW 11-column format (per ImportActivityItemsGBNoMainStore template)
+  var headers=['上架货号','活动数量','店铺','发布价','店铺佣金率','广告费率','税费率','活动价','活动返利','店铺运营','备注'];
   var rows=[headers];
   prods.forEach(function(pp){
     var loc=findItem(pp.asin);
@@ -5657,8 +5744,9 @@ function exportPromoAmazonFormat(promoId){
     }
     var origPrice=pp.originalPrice||0;
     var promoPrice=pp.promoPrice||0;
-    // 上架货号 = new_sku (fall back to sku, then asin)
-    rows.push([sku||pp.asin, '', '', origPrice||'', '', '', '', '', promoPrice||'', '', '']);
+    // A:上架货号 B:活动数量(空) C:店铺(Tangzon) D:发布价
+    // E-G:费率(空) H:活动价 I-K:其余(空)
+    rows.push([sku||pp.asin, '', 'Tangzon', origPrice||'', '', '', '', promoPrice||'', '', '', '']);
   });
   // Build workbook
   var ws=XLSX.utils.aoa_to_sheet(rows);
@@ -5681,12 +5769,12 @@ function exportPromoAmazonFormat(promoId){
 function exportPromoAmazonCsv(promoId){
   var p=PROMOTIONS[promoId];if(!p)return;
   var prods=p.products||[];
-  var headers=['上架货号','活动数量','RRP','发布价','店铺佣金率','广告费率','税费率','折扣率','活动价','活动返利','备注'];
+  var headers=['上架货号','活动数量','店铺','发布价','店铺佣金率','广告费率','税费率','活动价','活动返利','店铺运营','备注'];
   var lines=[headers.join(',')];
   prods.forEach(function(pp){
     var loc=findItem(pp.asin),sku='';
     if(loc.cat){var it=DATA[loc.cat][loc.sub][loc.idx];sku=it.new_sku||it.sku||'';}
-    lines.push([sku||pp.asin,'','',pp.originalPrice||'','','','','',pp.promoPrice||'','',''].join(','));
+    lines.push([sku||pp.asin,'','Tangzon',pp.originalPrice||'','','','',pp.promoPrice||'','','',''].join(','));
   });
   var blob=new Blob(['\uFEFF'+lines.join('\n')],{type:'text/csv;charset=utf-8'});
   dl(blob,'活动提报.csv');
@@ -5697,10 +5785,31 @@ function exportPromoAmazonCsv(promoId){
 // 更新日志 (Changelog)
 // 每次发新版，在 CHANGELOG 数组最前面加一条即可。
 // ════════════════════════════════════════════════════════════════
-var APP_VERSION='3.5.3';
+var APP_VERSION='3.5.5';
 // 标题栏自动显示当前版本号（跟随 APP_VERSION，不用手动改）
 try{ document.title = 'Tangzon 产品管理 v' + APP_VERSION; }catch(e){}
 var CHANGELOG=[
+  {
+    v:'3.5.5', date:'2026-06-09',
+    notes:[
+      '修复：待分配区布局错乱（描述文字飘到右边、产品卡位置奇怪需要下滑才能看到的问题）',
+      '修复：根因是 .dash-hd 的 flex 布局把描述文字推到了远端，现已重构',
+      '优化：导入到待分配区现在只需要 ASIN 一列（其他列都可选）',
+      '优化：CSV / JSON 导入会自动识别这些列（如果有）：sku、新货号、价格、星级、评论数、大类、小类、备注、等级',
+      '优化：分配产品到类目时，如果文件原本就有大类/小类信息，会自动预选这个类目（省一步手选）'
+    ]
+  },
+  {
+    v:'3.5.4', date:'2026-06-09',
+    notes:[
+      '修复：星级抓取有时把没评论的产品抓成 5 星的 bug（根因：之前的正则匹配到了页面其他位置的"5 stars"文字）',
+      '修复：现在没有评论数的产品不会再被错误设置星级',
+      '优化：星级抓取只查 amazon.co.uk（之前会 fallback 到 .com / .de，可能抓到不相关的 listing）',
+      '更新：活动提报表导出格式更新为新模板（11 列：上架货号/活动数量/店铺/发布价/店铺佣金率/广告费率/税费率/活动价/活动返利/店铺运营/备注）',
+      '更新：导出时 店铺 列默认填充 Tangzon',
+      '优化：批量添加 ASIN 现在支持横竖排任意分隔方式（空格 / 逗号 / Tab / 换行 / 分号 都能识别）'
+    ]
+  },
   {
     v:'3.5.3', date:'2026-06-02',
     notes:[
