@@ -133,6 +133,9 @@ function getSettings() {
     autoRating: cfg.autoRating || false,
     ratingScope: cfg.ratingScope || 'all',
     ratingOrder: cfg.ratingOrder || 'oldest',
+    ratingMode: cfg.ratingMode || 'smart',
+    ratingQuota: cfg.ratingQuota || 100,
+    ratingFailPauseHours: cfg.ratingFailPauseHours || 3,
     closeToTrayShown: cfg.closeToTrayShown || false
   };
 }

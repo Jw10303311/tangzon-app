@@ -840,6 +840,27 @@ body.dark .cpal{background:rgba(0,0,0,.7);}
         </select>
       </div>
     </div>
+    <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">
+      <div style="flex:1;min-width:140px">
+        <label class="fl" style="font-size:10.5px">更新模式</label>
+        <select class="fsel" id="set-rating-mode" style="font-size:11.5px;padding:5px 7px">
+          <option value="smart">智能频率优先</option>
+          <option value="classic">按上方顺序抓取</option>
+        </select>
+      </div>
+      <div style="flex:1;min-width:120px">
+        <label class="fl" style="font-size:10.5px">每日上限</label>
+        <input class="fi" id="set-rating-quota" type="number" min="10" max="500" step="10" value="100" style="font-size:11.5px;padding:6px 8px">
+      </div>
+      <div style="flex:1;min-width:120px">
+        <label class="fl" style="font-size:10.5px">失败保护</label>
+        <select class="fsel" id="set-rating-fail-pause" style="font-size:11.5px;padding:5px 7px">
+          <option value="1">暂停 1 小时</option>
+          <option value="3">暂停 3 小时</option>
+          <option value="6">暂停 6 小时</option>
+        </select>
+      </div>
+    </div>
     <div style="margin-top:8px;text-align:right">
       <button onclick="previewRatingTargets()" style="background:transparent;border:0;color:var(--accent);font-size:11px;cursor:pointer;text-decoration:underline;font-family:inherit;padding:0">预览今日会抓哪些产品 →</button>
     </div>
@@ -4887,6 +4908,9 @@ function _applyImgs(){
       var ar=document.getElementById('set-auto-rating');
       var sc=document.getElementById('set-rating-scope');
       var so=document.getElementById('set-rating-order');
+      var rm=document.getElementById('set-rating-mode');
+      var rq=document.getElementById('set-rating-quota');
+      var rfp=document.getElementById('set-rating-fail-pause');
       if(a)a.checked=!!s.autoStart;
       if(m)m.checked=!!s.minToTray;
       if(ne)ne.checked=!!s.notifyExpiring;
@@ -4914,6 +4938,21 @@ function _applyImgs(){
         var savedOrder=s.ratingOrder;
         if(!savedOrder){try{var lo=localStorage.getItem('tz3_rating_order');if(lo)savedOrder=lo;}catch(e){}}
         so.value=savedOrder||'oldest';
+      }
+      if(rm){
+        var savedMode=s.ratingMode;
+        if(!savedMode){try{var lm=localStorage.getItem('tz3_rating_mode');if(lm)savedMode=lm;}catch(e){}}
+        rm.value=savedMode||'smart';
+      }
+      if(rq){
+        var savedQuota=parseInt(s.ratingQuota,10);
+        if(!savedQuota){try{var lq=parseInt(localStorage.getItem('tz3_rating_quota')||'',10);if(lq)savedQuota=lq;}catch(e){}}
+        rq.value=Math.max(10,Math.min(500,savedQuota||100));
+      }
+      if(rfp){
+        var savedPause=parseInt(s.ratingFailPauseHours,10);
+        if(!savedPause){try{var lp=parseInt(localStorage.getItem('tz3_rating_fail_pause')||'',10);if(lp)savedPause=lp;}catch(e){}}
+        rfp.value=String(savedPause||3);
       }
       if(window.electronAPI&&window.electronAPI.getBackupDir){
         window.electronAPI.getBackupDir().then(function(dir){
@@ -4947,13 +4986,19 @@ function _applyImgs(){
       notifyBackup:document.getElementById('set-notify-backup').checked,
       autoRating:document.getElementById('set-auto-rating')?document.getElementById('set-auto-rating').checked:false,
       ratingScope:document.getElementById('set-rating-scope')?document.getElementById('set-rating-scope').value:'all',
-      ratingOrder:document.getElementById('set-rating-order')?document.getElementById('set-rating-order').value:'oldest'
+      ratingOrder:document.getElementById('set-rating-order')?document.getElementById('set-rating-order').value:'oldest',
+      ratingMode:document.getElementById('set-rating-mode')?document.getElementById('set-rating-mode').value:'smart',
+      ratingQuota:document.getElementById('set-rating-quota')?Math.max(10,Math.min(500,parseInt(document.getElementById('set-rating-quota').value,10)||100)):100,
+      ratingFailPauseHours:document.getElementById('set-rating-fail-pause')?Math.max(1,Math.min(12,parseInt(document.getElementById('set-rating-fail-pause').value,10)||3)):3
     };
     var wasAutoRating=updates.autoRating;
     // FIX: also persist scope/order to localStorage as fallback
     try{
       localStorage.setItem('tz3_rating_scope',updates.ratingScope||'all');
       localStorage.setItem('tz3_rating_order',updates.ratingOrder||'oldest');
+      localStorage.setItem('tz3_rating_mode',updates.ratingMode||'smart');
+      localStorage.setItem('tz3_rating_quota',String(updates.ratingQuota||100));
+      localStorage.setItem('tz3_rating_fail_pause',String(updates.ratingFailPauseHours||3));
     }catch(e){}
     var spUpdates={
       enabled:document.getElementById('set-spapi-enabled')?document.getElementById('set-spapi-enabled').checked:false,
@@ -5268,7 +5313,7 @@ function toggleDarkMode(){
 // 每天约 50 个，挑"最久没更新"的产品优先，间隔 25 秒。
 // 仅在 Electron 桌面版且用户在设置里开启时运行。
 // ════════════════════════════════════════════════════════════════
-var _ratingJob={running:false,doneToday:0,quota:50,cancelled:false};
+var _ratingJob={running:false,doneToday:0,quota:100,cancelled:false};
 
 function _ratingStateKey(){return 'tz3_rating_state';}
 function _loadRatingState(){
@@ -5281,6 +5326,48 @@ function _loadRatingState(){
 }
 function _saveRatingState(s){
   try{localStorage.setItem(_ratingStateKey(),JSON.stringify(s));}catch(e){}
+}
+
+function _ratingFailKey(){return 'tz3_rating_fail_state';}
+function _loadRatingFailState(){
+  try{return JSON.parse(localStorage.getItem(_ratingFailKey())||'{}')||{};}catch(e){return {};}
+}
+function _saveRatingFailState(s){
+  try{localStorage.setItem(_ratingFailKey(),JSON.stringify(s||{}));}catch(e){}
+}
+function _normalRatingQuota(v){
+  v=parseInt(v,10);
+  if(!v||v<10)v=100;
+  if(v>500)v=500;
+  return v;
+}
+function _activePromoAsins(){
+  var set={},today=new Date().toISOString().slice(0,10);
+  try{
+    Object.keys(PROMOTIONS||{}).forEach(function(k){
+      var p=PROMOTIONS[k]||{};
+      if(p.startDate&&p.startDate>today)return;
+      if(p.endDate&&p.endDate<today)return;
+      (p.products||[]).forEach(function(pp){
+        var a=(pp.asin||pp.ASIN||'').toUpperCase();
+        if(a)set[a]=1;
+      });
+    });
+  }catch(e){}
+  return set;
+}
+function _recentRatingFailureMap(){
+  var map={};
+  try{
+    (RATING_LOG||[]).slice(0,120).forEach(function(e){
+      if(!e||e.ok)return;
+      var a=(e.asin||'').toUpperCase();
+      if(!a)return;
+      if(!map[a])map[a]=0;
+      map[a]++;
+    });
+  }catch(e){}
+  return map;
 }
 
 // Parse star rating + review count from an Amazon product page HTML
@@ -5364,10 +5451,11 @@ function fetchAmazonRating(asin){
   });
 }
 
-// Pick products that most need a rating refresh (never fetched, or oldest)
-function _pickRatingTargets(limit, scope, order){
-  scope=scope||'all'; order=order||'oldest';
+// Pick products that most need a rating refresh.
+function _pickRatingTargets(limit, scope, order, mode){
+  scope=scope||'all'; order=order||'oldest'; mode=mode||'smart';
   var all=[];
+  var now=Date.now(),day=86400000,activeMap=_activePromoAsins(),failMap=_recentRatingFailureMap();
   function include(c,s){
     if(scope==='all')return true;
     if(scope.indexOf('cat::')===0){return c===scope.slice(5);}
@@ -5380,15 +5468,41 @@ function _pickRatingTargets(limit, scope, order){
   Object.keys(DATA).forEach(function(c){Object.keys(DATA[c]).forEach(function(s){
     if(!include(c,s))return;
     DATA[c][s].forEach(function(it){
+      var asin=(it.asin||'').toUpperCase();
+      var fetched=it.ratingFetchedAt||0;
+      var sales=(typeof PROD_SALES!=='undefined'&&PROD_SALES[asin])||it.sales||0;
+      var hasImg=!!(it.img||(typeof getImg==='function'&&getImg(asin)));
+      var missing=(!it.star?1:0)+(!it.ratings?1:0)+(!it.price?1:0)+(!hasImg?1:0);
+      var active=!!activeMap[asin];
+      var ageDays=fetched?((now-fetched)/day):999;
+      var freqDays=14;
+      if(active)freqDays=1;
+      else if(missing>=2)freqDays=1;
+      else if(missing>=1)freqDays=2;
+      else if(sales>=1000)freqDays=2;
+      else if(sales>=300)freqDays=4;
+      else if(it.star&&it.star<4)freqDays=5;
+      var score=(ageDays/freqDays)*100;
+      score+=missing*90;
+      if(active)score+=140;
+      if(sales>0)score+=Math.min(80,Math.log(sales+1)*10);
+      score-=Math.min(180,(failMap[asin]||0)*60);
       all.push({
-        asin:it.asin,
-        t:it.ratingFetchedAt||0,
-        sales:(typeof PROD_SALES!=='undefined'&&PROD_SALES[it.asin])||it.sales||0,
-        star:it.star||5  // missing star treated as 5 (lowest priority for lowstar mode)
+        asin:asin,
+        t:fetched,
+        sales:sales,
+        star:it.star||5,  // missing star treated as 5 (lowest priority for lowstar mode)
+        score:score,
+        reason:active?'活动中':(missing?'缺数据':'到期更新')
       });
     });
   });});
-  if(order==='sales'){
+  if(mode==='smart'){
+    all.sort(function(a,b){
+      if(b.score!==a.score)return b.score-a.score;
+      return a.t-b.t;
+    });
+  } else if(order==='sales'){
     all.sort(function(a,b){return b.sales-a.sales;});
   } else if(order==='lowstar'){
     all.sort(function(a,b){
@@ -5409,6 +5523,32 @@ function _setRatingFetchedAt(asin){
   }
 }
 
+function previewRatingTargets(){
+  var scope=(q('set-rating-scope')&&q('set-rating-scope').value)||'all';
+  var order=(q('set-rating-order')&&q('set-rating-order').value)||'oldest';
+  var mode=(q('set-rating-mode')&&q('set-rating-mode').value)||'smart';
+  var quota=_normalRatingQuota(q('set-rating-quota')&&q('set-rating-quota').value);
+  var state=_loadRatingState();
+  var failState=_loadRatingFailState();
+  if(failState.pausedUntil&&failState.pausedUntil>Date.now()){
+    alert('当前处于失败保护暂停中，约 '+Math.ceil((failState.pausedUntil-Date.now())/60000)+' 分钟后恢复。');
+    return;
+  }
+  var remaining=Math.max(0,quota-(state.doneToday||0));
+  var targets=_pickRatingTargets(remaining,scope,order,mode);
+  if(!targets.length){alert('今天没有需要自动更新的产品。');return;}
+  var lines=targets.slice(0,30).map(function(asin,i){
+    var loc=findItem(asin),sku='',path='';
+    if(loc.cat){
+      var it=DATA[loc.cat][loc.sub][loc.idx]||{};
+      sku=it.new_sku||it.sku||'';
+      path=loc.cat+' / '+loc.sub;
+    }
+    return (i+1)+'. '+asin+(sku?' · '+sku:'')+(path?' · '+path:'');
+  });
+  alert('今日预计抓取 '+targets.length+' 个产品（每日上限 '+quota+'，剩余 '+remaining+'）。\n模式：'+(mode==='smart'?'智能频率优先':'按上方顺序抓取')+'\n\n'+lines.join('\n')+(targets.length>30?'\n...':''));
+}
+
 // The background trickle runner
 function startRatingTrickle(){
   if(_ratingJob.running)return;
@@ -5418,15 +5558,25 @@ function startRatingTrickle(){
   window.electronAPI.getSettings().then(function(s){
     if(!s||!s.autoRating)return;  // setting off
     var state=_loadRatingState();
+    var failState=_loadRatingFailState();
+    if(failState.pausedUntil&&failState.pausedUntil>Date.now()){
+      var mins=Math.ceil((failState.pausedUntil-Date.now())/60000);
+      var pel=q('sb-rating-progress');
+      if(pel){pel.style.display='';pel.textContent='星级更新已保护暂停，约 '+mins+' 分钟后恢复';}
+      return;
+    }
+    _ratingJob.quota=_normalRatingQuota(s.ratingQuota);
     var remaining=_ratingJob.quota-state.doneToday;
     if(remaining<=0)return;  // today's quota used up
 
-    var targets=_pickRatingTargets(remaining, s.ratingScope, s.ratingOrder);
+    var targets=_pickRatingTargets(remaining, s.ratingScope, s.ratingOrder, s.ratingMode);
     if(!targets.length)return;
 
     _ratingJob.running=true;
     _ratingJob.cancelled=false;
+    _ratingJob.robotHit=false;
     var idx=0,ok=0;
+    var failPauseHours=Math.max(1,Math.min(12,parseInt(s.ratingFailPauseHours,10)||3));
 
     var _attemptDetails=[];  // [{asin, oldStar, newStar, oldRatings, newRatings, oldPrice, newPrice, ok, reason, sku, img, t}]
 
@@ -5557,6 +5707,14 @@ function startRatingTrickle(){
         var st=_loadRatingState();
         st.doneToday+=idx;
         _saveRatingState(st);
+        if(idx>0){
+          var failRate=(idx-ok)/idx;
+          if(_ratingJob.robotHit||(idx>=3&&failRate>=0.6)){
+            _saveRatingFailState({pausedUntil:Date.now()+failPauseHours*3600000,reason:_ratingJob.robotHit?'robot_check':'high_fail_rate'});
+          } else if(ok>0){
+            _saveRatingFailState({});
+          }
+        }
         if(ok>0){markDirty();save();renderGrid();}
         showCompletionResult();
         return;
@@ -5609,6 +5767,7 @@ function startRatingTrickle(){
         } else {
           _setRatingFetchedAt(asin);
           logEntry.reason=(res&&res.error==='robot_check')?'被反爬拦截':'页面没解析到数据';
+          if(res&&res.error==='robot_check'){_ratingJob.robotHit=true;_ratingJob.cancelled=true;}
           _detail.reason=logEntry.reason;
         }
         _attemptDetails.push(_detail);
@@ -6259,10 +6418,20 @@ function exportPromoAmazonCsv(promoId){
 // 更新日志 (Changelog)
 // 每次发新版，在 CHANGELOG 数组最前面加一条即可。
 // ════════════════════════════════════════════════════════════════
-var APP_VERSION='3.5.9';
+var APP_VERSION='3.5.10';
 // 标题栏自动显示当前版本号（跟随 APP_VERSION，不用手动改）
 try{ document.title = 'Tangzon 产品管理 v' + APP_VERSION; }catch(e){}
 var CHANGELOG=[
+  {
+    v:'3.5.10', date:'2026-06-21',
+    notes:[
+      '新增：自动抓取支持智能频率模式，会优先更新活动中、缺星级/评论/价格/图片、销量高、长时间未更新的产品',
+      '新增：每日抓取上限可在设置页调整，默认从 50 提升到 100，并限制在 10-500 之间',
+      '新增：失败保护暂停时间可设置，遇到 Robot Check 或失败率过高时会自动暂停，避免连续请求导致更不稳定',
+      '新增：保留原来的按类目/小类范围抓取，智能模式会在所选范围内排序，不会越过你选定的类目',
+      '修复：设置页“预览今日会抓哪些产品”按钮现在可以真正预览智能队列'
+    ]
+  },
   {
     v:'3.5.9', date:'2026-06-21',
     notes:[
