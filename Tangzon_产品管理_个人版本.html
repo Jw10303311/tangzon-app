@@ -6801,10 +6801,18 @@ function exportPromoAmazonCsv(promoId){
 // 更新日志 (Changelog)
 // 每次发新版，在 CHANGELOG 数组最前面加一条即可。
 // ════════════════════════════════════════════════════════════════
-var APP_VERSION='3.5.14';
+var APP_VERSION='3.5.15';
 // 标题栏自动显示当前版本号（跟随 APP_VERSION，不用手动改）
 try{ document.title = 'Tangzon 产品管理 v' + APP_VERSION; }catch(e){}
 var CHANGELOG=[
+  {
+    v:'3.5.15', date:'2026-06-21',
+    notes:[
+      '修复：检查更新连不上 GitHub 时，提示改为网络说明，不再像软件故障一样弹出原始错误',
+      '优化：在线小更新增加备用 CDN 地址，GitHub 原始地址超时时会自动尝试备用线路',
+      '优化：小更新失败时会明确提示软件仍可继续正常使用，产品数据不受影响'
+    ]
+  },
   {
     v:'3.5.14', date:'2026-06-21',
     notes:[

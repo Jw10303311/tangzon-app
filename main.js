@@ -42,6 +42,10 @@ let isQuitting = false;
 let pendingFileArg = null;
 const BUILTIN_HTML_FILE = 'Tangzon_产品管理_个人版本.html';
 const HOT_UPDATE_MANIFEST_URL = process.env.TANGZON_HOT_UPDATE_URL || 'https://raw.githubusercontent.com/Jw10303311/tangzon-app/main/hot-update.json';
+const HOT_UPDATE_FALLBACK_URLS = [
+  HOT_UPDATE_MANIFEST_URL,
+  'https://cdn.jsdelivr.net/gh/Jw10303311/tangzon-app@main/hot-update.json'
+].filter((url, idx, arr) => url && arr.indexOf(url) === idx);
 
 // ── 数据目录管理 ───────────────────────────────────────────
 const isPortable = !!process.env.PORTABLE_EXECUTABLE_DIR;
@@ -159,6 +163,28 @@ function fetchHttpsBuffer(url, maxBytes = 1024 * 1024, redirects = 3) {
 function sha256(buf) {
   return crypto.createHash('sha256').update(buf).digest('hex');
 }
+async function fetchHotManifestBuffer(preferredUrl) {
+  const urls = (preferredUrl && preferredUrl !== HOT_UPDATE_MANIFEST_URL)
+    ? [preferredUrl].concat(HOT_UPDATE_FALLBACK_URLS)
+    : HOT_UPDATE_FALLBACK_URLS;
+  let lastError = null;
+  for (const url of urls.filter((item, idx, arr) => item && arr.indexOf(item) === idx)) {
+    try {
+      return { url, buffer: await fetchHttpsBuffer(url, 512 * 1024) };
+    } catch (e) {
+      lastError = e;
+      console.warn('Hot update manifest fetch failed:', url, e.message);
+    }
+  }
+  throw lastError || new Error('hot_update_unreachable');
+}
+function friendlyNetworkMessage(err) {
+  const msg = String(err && err.message ? err.message : err || '');
+  if (/TIMED_OUT|timeout|ENOTFOUND|ECONNRESET|ECONNREFUSED|handshake|SSL|TLS|net::ERR/i.test(msg)) {
+    return '暂时连不上 GitHub 更新服务器，软件可以继续正常使用。请稍后重试，或确认网络/代理/VPN 是否可用。';
+  }
+  return '检查更新时遇到问题，软件可以继续正常使用。';
+}
 function pickHotHtmlFile(manifest) {
   if (manifest && Array.isArray(manifest.files)) {
     return manifest.files.find(f => f && (f.name === BUILTIN_HTML_FILE || /\.html?$/i.test(String(f.name || ''))));
@@ -191,7 +217,8 @@ async function checkHotUpdate(silent = false) {
   const cfg = loadConfig();
   const manifestUrl = cfg.hotUpdateUrl || HOT_UPDATE_MANIFEST_URL;
   try {
-    const manifestBuf = await fetchHttpsBuffer(manifestUrl, 512 * 1024);
+    const manifestResult = await fetchHotManifestBuffer(manifestUrl);
+    const manifestBuf = manifestResult.buffer;
     const remote = JSON.parse(manifestBuf.toString('utf-8'));
     if (!remote || remote.enabled === false) return { ok: true, upToDate: true, message: 'hot_update_disabled' };
 
@@ -236,7 +263,7 @@ async function checkHotUpdate(silent = false) {
       minAppVersion: remote.minAppVersion || '',
       maxAppVersion: remote.maxAppVersion || '',
       notes: Array.isArray(remote.notes) ? remote.notes : [],
-      source: manifestUrl,
+      source: manifestResult.url,
       installedAt: new Date().toISOString()
     };
     saveHotManifest(installed);
@@ -260,7 +287,12 @@ async function checkHotUpdate(silent = false) {
     return { ok: true, applied: true, version: remote.version, notes: installed.notes };
   } catch (e) {
     if (!silent) {
-      dialog.showErrorBox('小更新检查失败', e.message || String(e));
+      dialog.showMessageBox(mainWindow, {
+        type: 'warning',
+        title: '小更新检查失败',
+        message: friendlyNetworkMessage(e),
+        detail: '错误: ' + (e && e.message ? e.message : String(e))
+      });
     }
     return { ok: false, error: e.message || String(e) };
   }
@@ -668,8 +700,8 @@ function setupAutoUpdater() {
       dialog.showMessageBox(mainWindow, {
         type: 'warning',
         title: '检查更新失败',
-        message: '检查更新时出错',
-        detail: String(err && err.message ? err.message : err)
+        message: friendlyNetworkMessage(err),
+        detail: '错误: ' + String(err && err.message ? err.message : err)
       });
     }
     _manualUpdateCheck = false;
@@ -713,8 +745,8 @@ function checkForUpdates(silent) {
           dialog.showMessageBox(mainWindow, {
             type: 'warning',
             title: '检查更新失败',
-            message: '无法连接到更新服务器',
-            detail: '请检查网络连接后重试。\n\n错误: ' + (e && e.message ? e.message : String(e))
+            message: friendlyNetworkMessage(e),
+            detail: '错误: ' + (e && e.message ? e.message : String(e))
           });
         }
       });
@@ -722,7 +754,12 @@ function checkForUpdates(silent) {
   } catch (e) {
     console.error('checkForUpdates exception:', e);
     if (!silent && mainWindow) {
-      dialog.showMessageBox(mainWindow, { type: 'warning', title: '检查更新失败', message: String(e) });
+      dialog.showMessageBox(mainWindow, {
+        type: 'warning',
+        title: '检查更新失败',
+        message: friendlyNetworkMessage(e),
+        detail: '错误: ' + String(e && e.message ? e.message : e)
+      });
     }
   }
 }
