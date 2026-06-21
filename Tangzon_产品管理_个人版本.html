@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
@@ -83,6 +83,9 @@ a{color:inherit;text-decoration:none;}
 .layout{display:flex;margin-top:var(--hd);min-height:calc(100vh - var(--hd));}
 .sidebar{width:var(--sb);flex-shrink:0;position:fixed;top:var(--hd);bottom:0;left:0;background:var(--sur);border-right:1px solid var(--bor);display:flex;flex-direction:column;z-index:200;}
 .main{margin-left:var(--sb);flex:1;padding:24px 26px;padding-bottom:110px;min-width:0;}
+#v-inbox{position:fixed;top:var(--hd);left:var(--sb);right:0;bottom:0;z-index:60;padding:24px 26px 110px;box-sizing:border-box;overflow-y:auto;background:var(--bg);}
+#v-inbox #inbox-empty{min-height:calc(100vh - var(--hd) - 190px);display:flex;align-items:center;justify-content:center;flex-direction:column;}
+#v-inbox #inbox-grid:empty{display:none;}
 
 /* SIDEBAR ─────────────────────────────────────────────── */
 .sb-actbar{display:flex;align-items:center;gap:6px;padding:11px 12px 10px;border-bottom:1px solid var(--bor);background:var(--sur);flex-shrink:0;flex-wrap:wrap;}
@@ -1040,6 +1043,11 @@ body.dark .cpal{background:rgba(0,0,0,.7);}
   <div class="fg" style="margin-top:8px">
     <label class="fl">ASIN + SKU + 小类</label>
     <textarea class="fi" id="inbox-quick-text" rows="10" placeholder="ASIN&#9;SKU&#9;小类&#10;B0XXXXXXXX&#9;FP12345GB&#9;Electric Fireplaces&#10;B0YYYYYYYY&#9;FP12346GB&#9;Electric Fireplaces" style="font-family:'JetBrains Mono',monospace;font-size:12px;resize:vertical"></textarea>
+  </div>
+  <div id="inbox-quick-drop" onclick="q('inbox-quick-file').click()" style="margin-top:8px;border:1px dashed var(--accent-bor);background:var(--accent-bg);border-radius:8px;padding:12px 14px;cursor:pointer;color:var(--accent);font-size:11.5px;line-height:1.55">
+    <div style="font-weight:700">拖入 Excel / CSV 文件，或点击选择文件</div>
+    <div style="font-size:10.5px;color:var(--tx3);margin-top:2px">支持 .xlsx / .xls / .csv，会自动读取 ASIN、SKU、小类三列并填入上方文本框。</div>
+    <input type="file" id="inbox-quick-file" accept=".xlsx,.xls,.csv" style="display:none" onchange="handleInboxQuickFile(this.files&&this.files[0]);this.value='';">
   </div>
   <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:8px">
     <label style="display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--tx2);cursor:pointer">
@@ -6260,6 +6268,84 @@ function openInboxQuickImport(){
   q('inbox-quick-auto').checked=true;
   q('inbox-quick-preview').textContent='';
   openMo('mo-inbox-quick');
+  setTimeout(bindInboxQuickDrop,30);
+}
+function bindInboxQuickDrop(){
+  var box=q('inbox-quick-drop'),mo=q('mo-inbox-quick');
+  if(!box||box._bound)return;
+  box._bound=true;
+  function over(e){
+    e.preventDefault();e.stopPropagation();
+    box.style.background='rgba(79,70,229,.14)';
+    box.style.borderColor='var(--accent)';
+    if(e.dataTransfer)e.dataTransfer.dropEffect='copy';
+  }
+  function leave(e){
+    e.preventDefault();e.stopPropagation();
+    box.style.background='var(--accent-bg)';
+    box.style.borderColor='var(--accent-bor)';
+  }
+  function drop(e){
+    e.preventDefault();e.stopPropagation();
+    leave(e);
+    var f=e.dataTransfer&&e.dataTransfer.files&&e.dataTransfer.files[0];
+    handleInboxQuickFile(f);
+  }
+  [box,mo].forEach(function(el){
+    if(!el)return;
+    el.addEventListener('dragover',over,false);
+    el.addEventListener('dragenter',over,false);
+    el.addEventListener('dragleave',leave,false);
+    el.addEventListener('drop',drop,false);
+  });
+}
+function _quickAoaToText(aoa){
+  aoa=(aoa||[]).filter(function(r){return r&&r.some(function(c){return String(c||'').trim();});});
+  if(!aoa.length)return '';
+  var first=aoa[0].map(function(c){return String(c||'').trim().toLowerCase();});
+  var hasHeader=first.some(function(h){return h.indexOf('asin')>=0||h.indexOf('sku')>=0||h.indexOf('货号')>=0||h.indexOf('小类')>=0||h.indexOf('sub')>=0||h.indexOf('类目')>=0;});
+  var iA=0,iSku=1,iSub=2,start=0;
+  if(hasHeader){
+    start=1;
+    first.forEach(function(h,i){
+      if(h.indexOf('asin')>=0)iA=i;
+      if(h.indexOf('sku')>=0||h.indexOf('货号')>=0)iSku=i;
+      if(h.indexOf('小类')>=0||h.indexOf('sub')>=0||h.indexOf('类目')>=0||h.indexOf('category')>=0)iSub=i;
+    });
+  }
+  var out=['ASIN\tSKU\t小类'];
+  aoa.slice(start).forEach(function(r){
+    var asin=String(r[iA]||'').replace(/[^A-Z0-9]/gi,'').toUpperCase();
+    if(!/^[A-Z0-9]{10,12}$/.test(asin))return;
+    out.push([asin,String(r[iSku]||'').trim(),String(r[iSub]||'').trim()].join('\t'));
+  });
+  return out.join('\n');
+}
+function handleInboxQuickFile(file){
+  if(!file)return;
+  var name=(file.name||'').toLowerCase();
+  if(!/\.(xlsx|xls|csv)$/.test(name)){toast('请选择 Excel / CSV 文件');return;}
+  if(typeof XLSX==='undefined'){toast('Excel 模块还没加载完成，请稍后再试');return;}
+  var reader=new FileReader();
+  reader.onload=function(e){
+    try{
+      var wb;
+      if(name.endsWith('.csv')){
+        wb=XLSX.read(String(e.target.result||''),{type:'string'});
+      }else{
+        wb=XLSX.read(new Uint8Array(e.target.result),{type:'array'});
+      }
+      var ws=wb.Sheets[wb.SheetNames[0]];
+      var aoa=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
+      var text=_quickAoaToText(aoa);
+      if(!text||text.split(/\n/).length<2){toast('没有识别到有效 ASIN 行');return;}
+      q('inbox-quick-text').value=text;
+      previewInboxQuickImport();
+      toast('✓ 已读取 '+file.name);
+    }catch(err){toast('Excel 解析失败：'+err.message);}
+  };
+  if(name.endsWith('.csv'))reader.readAsText(file,'utf-8');
+  else reader.readAsArrayBuffer(file);
 }
 function _splitQuickLine(line){
   line=String(line||'').trim();
@@ -6714,10 +6800,19 @@ function exportPromoAmazonCsv(promoId){
 // 更新日志 (Changelog)
 // 每次发新版，在 CHANGELOG 数组最前面加一条即可。
 // ════════════════════════════════════════════════════════════════
-var APP_VERSION='3.5.12';
+var APP_VERSION='3.5.13';
 // 标题栏自动显示当前版本号（跟随 APP_VERSION，不用手动改）
 try{ document.title = 'Tangzon 产品管理 v' + APP_VERSION; }catch(e){}
 var CHANGELOG=[
+  {
+    v:'3.5.13', date:'2026-06-21',
+    notes:[
+      '新增：批量录入到待分配区支持直接拖入 Excel / CSV 文件，也可以点击选择文件',
+      '新增：Excel 会自动读取第一张表，并识别 ASIN、SKU、小类列后填入批量录入框',
+      '优化：批量录入弹窗内拖拽文件不会再被全局导入逻辑抢走',
+      '修复：待分配区为空时空状态位置异常，需要下滑很久才看到的问题'
+    ]
+  },
   {
     v:'3.5.12', date:'2026-06-21',
     notes:[
