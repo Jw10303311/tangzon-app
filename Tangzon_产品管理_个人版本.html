@@ -517,6 +517,7 @@ body.dark .cpal{background:rgba(0,0,0,.7);}
       <button class="hd-tab" id="tab-retired" onclick="switchTab('retired')">淘汰</button>
       <button class="hd-tab" id="tab-inbox" onclick="switchTab('inbox')">待分配<span id="tab-inbox-cnt" style="margin-left:4px;font-family:'JetBrains Mono',monospace;font-size:9.5px;background:var(--accent-bg);color:var(--accent);padding:1px 6px;border-radius:99px;display:none">0</span></button>
     </div>
+    <button class="hd-tab" onclick="openInboxQuickImport()" title="批量录入 ASIN / SKU / 小类" style="margin-left:8px;background:#fff;color:var(--accent);border-color:rgba(255,255,255,.75)">批量录入</button>
     <button id="btn-pin-window" onclick="togglePinWindow()" title="窗口置顶 — 点击让窗口始终在最前" style="display:none;margin-left:10px;width:32px;height:32px;border:1px solid var(--bor);background:var(--sur);border-radius:8px;cursor:pointer;color:var(--tx3);transition:all .15s;align-items:center;justify-content:center;padding:0;flex-shrink:0">
       <svg id="pin-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="17" x2="12" y2="22"/><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z"/></svg>
     </button>
@@ -906,6 +907,7 @@ body.dark .cpal{background:rgba(0,0,0,.7);}
           <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
             <div class="dash-title">待分配产品</div>
             <span id="inbox-meta" style="font-size:11px;color:var(--tx3)"></span>
+            <button class="btn-c" onclick="openInboxQuickImport()" style="font-size:10px;color:var(--accent);border-color:var(--accent-bor);margin-left:auto;position:relative;z-index:3">批量录入 ASIN/SKU/小类</button>
           </div>
         </div>
         <p style="font-size:11px;color:var(--tx3);margin:0">导入但还未归类的产品。抓好图后，勾选产品分配到你自己的大类/小类。</p>
@@ -913,7 +915,7 @@ body.dark .cpal{background:rgba(0,0,0,.7);}
       <div id="inbox-toolbar" style="display:none;align-items:center;gap:10px;padding:8px 12px;background:var(--accent-bg);border-radius:8px;margin-bottom:12px;flex-wrap:wrap">
         <span style="font-size:11px;color:var(--accent);font-weight:600" id="inbox-sel-count">已选 0 个</span>
         <button class="btn-c" onclick="openAssignModal()" style="font-size:10px;color:var(--accent);border-color:var(--accent-bor)">分配到类目</button>
-        <button class="btn-c" onclick="batchFetchInboxImgs()" style="font-size:10px">批量抓图（缺图）</button>
+        <button class="btn-c" onclick="batchFetchInboxImgs()" style="font-size:10px">批量补资料</button>
         <button class="btn-c" onclick="clearInboxSelection()" style="font-size:10px">取消选择</button>
       </div>
       <div id="inbox-grid" class="pg"></div>
@@ -1027,6 +1029,31 @@ body.dark .cpal{background:rgba(0,0,0,.7);}
   <div class="fa">
     <button class="btn-c" onclick="closeMo('mo-assign')">取消</button>
     <button class="btn-ok" onclick="confirmAssign()">确认分配</button>
+  </div>
+</div></div>
+
+<!-- Quick inbox import modal -->
+<div class="mo" id="mo-inbox-quick"><div class="md md-wide" style="width:620px;max-height:82vh;display:flex;flex-direction:column">
+  <button class="md-x" onclick="closeMo('mo-inbox-quick')">✕</button>
+  <div class="md-title">批量录入到待分配区</div>
+  <div class="md-sub">粘贴 ASIN、SKU、小类三列。支持 Excel 直接复制，也支持逗号 / Tab / 空格分隔。</div>
+  <div class="fg" style="margin-top:8px">
+    <label class="fl">ASIN + SKU + 小类</label>
+    <textarea class="fi" id="inbox-quick-text" rows="10" placeholder="ASIN&#9;SKU&#9;小类&#10;B0XXXXXXXX&#9;FP12345GB&#9;Electric Fireplaces&#10;B0YYYYYYYY&#9;FP12346GB&#9;Electric Fireplaces" style="font-family:'JetBrains Mono',monospace;font-size:12px;resize:vertical"></textarea>
+  </div>
+  <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:8px">
+    <label style="display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--tx2);cursor:pointer">
+      <input type="checkbox" id="inbox-quick-auto" checked style="width:15px;height:15px"> 导入后自动抓图、星级、评论数、价格
+    </label>
+    <span id="inbox-quick-preview" style="font-size:11px;color:var(--tx3)"></span>
+  </div>
+  <div style="margin-top:8px;padding:9px 11px;background:var(--sur2);border-radius:7px;font-size:11px;color:var(--tx2);line-height:1.6">
+    小类如果已存在，会自动作为推荐类目；如果只是新小类，会先按小类分组放在待分配区，后续你再人工分配到产品库。
+  </div>
+  <div class="fa">
+    <button class="btn-c" onclick="closeMo('mo-inbox-quick')">取消</button>
+    <button class="btn-c" onclick="previewInboxQuickImport()" style="color:var(--accent);border-color:var(--accent-bor)">预览</button>
+    <button class="btn-ok" onclick="confirmInboxQuickImport()">导入到待分配区</button>
   </div>
 </div></div>
 
@@ -5913,6 +5940,58 @@ function renderInbox(){
   var noImg=UNASSIGNED.filter(function(p){return !(p.img||getImg(p.asin));}).length;
   if(meta&&noImg)meta.textContent+=' · '+noImg+' 个缺图';
 
+  var sorted=UNASSIGNED.slice().sort(function(a,b){
+    var ga=(a._origSub||a.subcat||'未指定小类').toLowerCase();
+    var gb=(b._origSub||b.subcat||'未指定小类').toLowerCase();
+    if(ga!==gb)return ga<gb?-1:1;
+    var sa=(a.new_sku||a.sku||'').toLowerCase();
+    var sb=(b.new_sku||b.sku||'').toLowerCase();
+    if(sa!==sb)return sa<sb?-1:1;
+    return (a.asin||'').localeCompare(b.asin||'');
+  });
+  var lastGroup=null;
+  var groupedHtml=sorted.map(function(p){
+    var aa=encodeURIComponent(p.asin);
+    var isSel=_inboxSel.has(p.asin);
+    var img=p.img||getImg(p.asin)||'';
+    var group=p._origSub||p.subcat||'未指定小类';
+    var groupHtml='';
+    if(group!==lastGroup){
+      lastGroup=group;
+      var gCount=sorted.filter(function(x){return (x._origSub||x.subcat||'未指定小类')===group;}).length;
+      groupHtml='<div style="grid-column:1/-1;display:flex;align-items:center;gap:8px;margin:8px 0 2px;padding:8px 10px;background:var(--sur2);border:1px solid var(--bor);border-radius:8px">'
+        +'<span style="font-size:12px;font-weight:700;color:var(--tx)">'+esc(group)+'</span>'
+        +'<span style="font-size:10.5px;color:var(--tx3)">'+gCount+' 个产品</span>'
+        +'<button class="btn-c" data-action="inbox-select-group" data-group="'+encodeURIComponent(group)+'" style="font-size:9.5px;margin-left:auto">选中本组</button>'
+      +'</div>';
+    }
+    var recLabel=(p._recCat||p._recSub)?[p._recCat,p._recSub].filter(Boolean).join(' / '):[p._origCat,p._origSub].filter(Boolean).join(' / ');
+    var srcLabel=(p._origSub&&p._recSub&&p._origSub!==p._recSub)?' · 原始：'+p._origSub:'';
+    var hint=recLabel?'<div style="font-size:10px;color:var(--accent);margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">推荐：'+esc(recLabel)+esc(srcLabel)+(p._recScore?' · '+p._recScore+'%':'')+'</div>':'';
+    var starLine=(p.star||p.ratings)?'<div style="font-size:10.5px;color:var(--tx3);margin-top:2px">★ '+(p.star?esc(String(p.star)):'-')+' · '+(p.ratings?esc(String(p.ratings)):'0')+' 评论</div>':'';
+    return groupHtml+'<div class="pc'+(isSel?' sel-card':'')+'" data-asin="'+esc(p.asin)+'">'
+      +'<label class="p-chk"><input type="checkbox" data-action="inbox-sel" data-asin="'+aa+'"'+(isSel?' checked':'')+' style="cursor:pointer"></label>'
+      +'<div class="p-img" data-asin="'+esc(p.asin)+'">'+(img?'<img src="'+esc(img)+'" style="width:100%;height:100%;object-fit:contain">':'<span class="p-img-ph">📦</span>')+'</div>'
+      +'<div class="p-body">'
+        +'<div style="margin-bottom:4px">'
+          +(p.new_sku?'<span class="p-sku" style="font-size:11px;font-weight:700;color:#15803d;background:#dcfce7;border-color:#86efac" data-action="copy-sku" data-sku="'+encodeURIComponent(p.new_sku)+'">'+esc(p.new_sku)+'</span>'
+            :(p.sku?'<span class="p-sku" data-action="copy-sku" data-sku="'+encodeURIComponent(p.sku)+'">'+esc(p.sku)+'</span>':'<span class="p-sku-ph">-</span>'))
+        +'</div>'
+        +hint
+        +'<div style="font-size:11.5px;color:var(--tx2);font-family:\'JetBrains Mono\',monospace;margin-bottom:3px">'+esc(p.asin)+'</div>'
+        +(p.price?'<div class="p-price">£'+esc(String(p.price))+'</div>':'<div style="font-size:11px;color:var(--tx3)">价格未知</div>')
+        +starLine
+        +'<div style="display:flex;gap:6px;margin-top:6px">'
+          +'<button class="btn-c" data-action="inbox-fetch" data-asin="'+aa+'" style="font-size:9.5px;flex:1">补资料</button>'
+          +'<button class="btn-c" data-action="inbox-assign-one" data-asin="'+aa+'" style="font-size:9.5px;flex:1;color:var(--accent);border-color:var(--accent-bor)">分配</button>'
+        +'</div>'
+      +'</div>'
+    +'</div>';
+  }).join('');
+  grid.innerHTML=groupedHtml;
+  updateInboxToolbar();
+  return;
+
   var html=UNASSIGNED.map(function(p){
     var aa=encodeURIComponent(p.asin);
     var isSel=_inboxSel.has(p.asin);
@@ -5968,6 +6047,13 @@ document.addEventListener('click',function(e){
   } else if(action==='inbox-assign-one'){
     _inboxSel=new Set([asin]);
     openAssignModal();
+  } else if(action==='inbox-select-group'){
+    var g=decodeURIComponent(t.dataset.group||'');
+    UNASSIGNED.forEach(function(p){
+      var pg=p._origSub||p.subcat||'未指定小类';
+      if(pg===g)_inboxSel.add(p.asin);
+    });
+    renderInbox();
   }
 },false);
 
@@ -5975,6 +6061,12 @@ document.addEventListener('click',function(e){
 function inboxFetchOne(asin){
   var p=UNASSIGNED.find(function(x){return x.asin===asin;});
   if(!p)return;
+  toast('正在补充 '+asin+' 的图片、星级、评论数和价格...');
+  fetchInboxDetails(p).then(function(ok){
+    markDirty();save();renderInbox();
+    toast(ok?'✓ '+asin+' 资料已更新':'未抓到 '+asin+' 的有效资料');
+  }).catch(function(){toast(asin+' 补资料出错');});
+  return;
   if(p.img||getImg(asin)){
     if(!confirm('该产品已有图片，确定重新抓取覆盖吗？'))return;
   }
@@ -5992,8 +6084,36 @@ function inboxFetchOne(asin){
   }).catch(function(){toast('✗ '+asin+' 抓图出错');});
 }
 
+function fetchInboxDetails(p){
+  if(!p||!p.asin)return Promise.resolve(false);
+  var changed=false;
+  var asin=p.asin;
+  var job=(typeof fetchAmazonRating==='function')?fetchAmazonRating(asin):Promise.resolve(null);
+  return job.then(function(res){
+    if(res){
+      if(res.star!==undefined){p.star=res.star;changed=true;}
+      if(res.ratings!==undefined){p.ratings=res.ratings;changed=true;}
+      if(res.price!==undefined){p.price=res.price;changed=true;}
+      if(res.img){p.img=res.img;if(typeof IMGS!=='undefined')IMGS[asin]=res.img;changed=true;}
+    }
+    if(p.img||getImg(asin))return changed;
+    return fetchAmazonImg(asin).then(function(url){
+      if(url){p.img=url;if(typeof IMGS!=='undefined')IMGS[asin]=url;changed=true;}
+      return changed;
+    });
+  }).then(function(ok){
+    if(ok&&typeof scheduleImgFlush==='function')scheduleImgFlush();
+    return ok;
+  });
+}
+
 // Batch fetch images for inbox products missing images
 function batchFetchInboxImgs(){
+  var detailTargets=UNASSIGNED.filter(function(p){return !(p.img||getImg(p.asin))||!p.star||!p.ratings||!p.price;});
+  if(!detailTargets.length){toast('待分配区没有需要补充资料的产品');return;}
+  if(!confirm('将为 '+detailTargets.length+' 个待分配产品补充图片、星级、评论数和价格。开始吗？'))return;
+  enrichInboxProducts(detailTargets);
+  return;
   var targets=UNASSIGNED.filter(function(p){return !(p.img||getImg(p.asin));});
   if(!targets.length){toast('待分配区没有缺图的产品');return;}
   if(!confirm('将为 '+targets.length+' 个缺图产品抓取主图，预计需要一些时间。开始吗？'))return;
@@ -6030,8 +6150,11 @@ function openAssignModal(){
   var hints={};
   Array.from(_inboxSel).forEach(function(asin){
     var p=UNASSIGNED.find(function(x){return x.asin===asin;});
-    if(p&&p._origCat){
-      var k=p._origCat+(p._origSub?'|'+p._origSub:'');
+    if(p&&(p._recCat||p._recSub||p._origCat||p._origSub)){
+      var rec=p._recSub?{cat:p._recCat,sub:p._recSub}:_guessCategoryBySub(p._origSub);
+      var hintCat=p._recCat||p._origCat||(rec?rec.cat:'');
+      var hintSub=p._recSub||((rec&&rec.sub)||p._origSub);
+      var k=hintCat+(hintSub?'|'+hintSub:'');
       hints[k]=(hints[k]||0)+1;
     }
   });
@@ -6132,6 +6255,179 @@ function confirmAssign(){
 }
 
 // ── Import target choice ────────────────────────────────────────
+function openInboxQuickImport(){
+  q('inbox-quick-text').value='';
+  q('inbox-quick-auto').checked=true;
+  q('inbox-quick-preview').textContent='';
+  openMo('mo-inbox-quick');
+}
+function _splitQuickLine(line){
+  line=String(line||'').trim();
+  if(!line)return [];
+  if(line.indexOf('\t')>=0)return line.split('\t').map(function(x){return x.trim();});
+  if(line.indexOf(',')>=0)return line.split(',').map(function(x){return x.trim();});
+  var asin=(line.match(/[A-Z0-9]{10,12}/i)||[])[0];
+  if(!asin)return line.split(/\s+/).map(function(x){return x.trim();});
+  var rest=line.replace(asin,'').trim();
+  var parts=rest.split(/\s+/).filter(Boolean);
+  var sku=parts.shift()||'';
+  return [asin,sku,parts.join(' ')];
+}
+function _guessCatBySub(sub){
+  var hit=_guessCategoryBySub(sub);
+  return hit?hit.cat:'';
+}
+function _normCategoryText(s){
+  return String(s||'').toLowerCase()
+    .replace(/[（(].*?[）)]/g,' ')
+    .replace(/&/g,' and ')
+    .replace(/[\-_\/|]+/g,' ')
+    .replace(/[^a-z0-9\u4e00-\u9fff]+/g,' ')
+    .replace(/\s+/g,' ')
+    .trim();
+}
+function _categoryTokens(s){
+  var n=_normCategoryText(s);
+  if(!n)return [];
+  return n.split(/\s+/).filter(function(x){return x&&x.length>1;});
+}
+function _categoryAliases(sub){
+  var out=[sub],seen={};
+  if(SUB_TRANS&&SUB_TRANS[sub])out.push(SUB_TRANS[sub]);
+  try{
+    Object.keys(SUB_TRANS||{}).forEach(function(en){
+      if(SUB_TRANS[en]===sub)out.push(en);
+    });
+  }catch(e){}
+  return out.filter(function(x){
+    x=String(x||'').trim();
+    if(!x||seen[x])return false;
+    seen[x]=1;return true;
+  });
+}
+function _categoryMatchScore(inputAliases, candidateAliases){
+  var best=0;
+  inputAliases.forEach(function(a){
+    var na=_normCategoryText(a);
+    if(!na)return;
+    candidateAliases.forEach(function(b){
+      var nb=_normCategoryText(b);
+      if(!nb)return;
+      if(na===nb){best=Math.max(best,100);return;}
+      if(na.indexOf(nb)>=0||nb.indexOf(na)>=0){best=Math.max(best,82);}
+      var at=_categoryTokens(na),bt=_categoryTokens(nb);
+      if(at.length&&bt.length){
+        var hits=0;
+        at.forEach(function(t){if(bt.indexOf(t)>=0)hits++;});
+        if(hits)best=Math.max(best,Math.round(55*hits/Math.max(at.length,bt.length)));
+      }
+    });
+  });
+  return best;
+}
+function _guessCategoryBySub(sub){
+  sub=(sub||'').trim();
+  if(!sub)return null;
+  var inputAliases=_categoryAliases(sub);
+  var best=null;
+  Object.keys(DATA||{}).forEach(function(c){
+    Object.keys(DATA[c]||{}).forEach(function(s){
+      var score=_categoryMatchScore(inputAliases,_categoryAliases(s));
+      if(score>0&&(!best||score>best.score))best={cat:c,sub:s,score:score};
+    });
+  });
+  if(best&&best.score>=55)return best;
+  return null;
+}
+function _parseInboxQuickRows(){
+  var raw=q('inbox-quick-text').value||'';
+  var lines=raw.split(/\r?\n/).map(function(l){return l.trim();}).filter(Boolean);
+  if(!lines.length)return [];
+  var first=_splitQuickLine(lines[0]).map(function(x){return String(x||'').toLowerCase();});
+  var hasHeader=first.some(function(x){return x.indexOf('asin')>=0||x.indexOf('sku')>=0||x.indexOf('小类')>=0||x.indexOf('sub')>=0;});
+  var iA=0,iSku=1,iSub=2,start=0;
+  if(hasHeader){
+    start=1;
+    first.forEach(function(h,i){
+      if(h.indexOf('asin')>=0)iA=i;
+      if(h.indexOf('sku')>=0||h.indexOf('货号')>=0)iSku=i;
+      if(h.indexOf('小类')>=0||h.indexOf('sub')>=0||h.indexOf('类目')>=0)iSub=i;
+    });
+  }
+  var rows=[];
+  lines.slice(start).forEach(function(line){
+    var cells=_splitQuickLine(line);
+    var asin=(cells[iA]||'').replace(/[^A-Z0-9]/gi,'').toUpperCase();
+    if(!/^[A-Z0-9]{10,12}$/.test(asin))return;
+    var sku=(cells[iSku]||'').trim();
+    var sub=(cells[iSub]||'').trim();
+    var rec=_guessCategoryBySub(sub);
+    rows.push({asin:asin,sku:sku,origSub:sub,origCat:rec?rec.cat:'',recCat:rec?rec.cat:'',recSub:rec?rec.sub:'',recScore:rec?rec.score:0});
+  });
+  var seen={},uniq=[];
+  rows.forEach(function(r){if(!seen[r.asin]){seen[r.asin]=1;uniq.push(r);}});
+  return uniq;
+}
+function previewInboxQuickImport(){
+  var rows=_parseInboxQuickRows();
+  var exist=0,inbox=0,matched=0;
+  rows.forEach(function(r){
+    if(findItem(r.asin).cat)exist++;
+    else if(UNASSIGNED.some(function(p){return p.asin===r.asin;}))inbox++;
+    if(r.recCat&&r.recSub)matched++;
+  });
+  q('inbox-quick-preview').textContent='识别 '+rows.length+' 条；推荐到中文类目 '+matched+'；产品库已存在 '+exist+'；待分配已存在 '+inbox;
+}
+function confirmInboxQuickImport(){
+  var rows=_parseInboxQuickRows();
+  if(!rows.length){toast('没有识别到有效 ASIN');return;}
+  createRestorePoint('before-inbox-quick-import');
+  var added=0,updated=0,skipped=0;
+  rows.forEach(function(r){
+    if(findItem(r.asin).cat){skipped++;return;}
+    var old=UNASSIGNED.find(function(p){return p.asin===r.asin;});
+    if(old){
+      if(r.sku)old.sku=r.sku;
+      if(r.origSub)old._origSub=r.origSub;
+      if(r.origCat)old._origCat=r.origCat;
+      if(r.recCat)old._recCat=r.recCat;
+      if(r.recSub)old._recSub=r.recSub;
+      if(r.recScore)old._recScore=r.recScore;
+      updated++;
+      return;
+    }
+    UNASSIGNED.push({asin:r.asin,sku:r.sku||null,_origSub:r.origSub||null,_origCat:r.origCat||null,_recCat:r.recCat||null,_recSub:r.recSub||null,_recScore:r.recScore||0});
+    added++;
+  });
+  markDirty();save();renderInbox();updateInboxBadge();switchTab('inbox');
+  closeMo('mo-inbox-quick');
+  toast('✓ 已导入 '+added+' 个，更新 '+updated+' 个，跳过 '+skipped+' 个已在产品库的 ASIN');
+  if(q('inbox-quick-auto').checked){
+    var targets=rows.map(function(r){return r.asin;}).map(function(a){return UNASSIGNED.find(function(p){return p.asin===a;});}).filter(Boolean);
+    setTimeout(function(){enrichInboxProducts(targets);},500);
+  }
+}
+function enrichInboxProducts(targets){
+  targets=(targets||[]).filter(Boolean);
+  if(!targets.length)return;
+  var i=0,ok=0;
+  function next(){
+    if(i>=targets.length){
+      markDirty();save();renderInbox();
+      toast('待分配资料补充完成：成功 '+ok+' / '+targets.length);
+      return;
+    }
+    var p=targets[i];
+    toast('补资料 '+(i+1)+'/'+targets.length+' · '+p.asin);
+    fetchInboxDetails(p).then(function(changed){
+      if(changed)ok++;
+      i++;
+      setTimeout(next,3500);
+    }).catch(function(){i++;setTimeout(next,3500);});
+  }
+  next();
+}
+
 var _pendingImportText=null,_pendingImportType=null;
 function confirmImportTarget(target){
   closeMo('mo-import-target');
@@ -6418,10 +6714,29 @@ function exportPromoAmazonCsv(promoId){
 // 更新日志 (Changelog)
 // 每次发新版，在 CHANGELOG 数组最前面加一条即可。
 // ════════════════════════════════════════════════════════════════
-var APP_VERSION='3.5.10';
+var APP_VERSION='3.5.12';
 // 标题栏自动显示当前版本号（跟随 APP_VERSION，不用手动改）
 try{ document.title = 'Tangzon 产品管理 v' + APP_VERSION; }catch(e){}
 var CHANGELOG=[
+  {
+    v:'3.5.12', date:'2026-06-21',
+    notes:[
+      '新增：待分配区英文小类可自动推荐中文类目，导入 Electric Fireplaces 等英文小类时会尝试匹配产品库里的中文小类',
+      '新增：类目推荐会使用内置中英文小类翻译表、同名匹配、包含匹配和关键词相似度判断',
+      '新增：待分配卡片显示推荐中文类目、原始导入小类和匹配置信度',
+      '优化：分配弹窗会优先预选推荐中文大类/小类，没有推荐时才回退到原始导入小类'
+    ]
+  },
+  {
+    v:'3.5.11', date:'2026-06-21',
+    notes:[
+      '新增：待分配区支持批量录入 ASIN / SKU / 小类，Excel 直接复制即可导入',
+      '新增：导入待分配后可自动补充 Amazon 图片、星级、评论数和价格',
+      '新增：待分配产品会按小类提示分组展示，同小类下 SKU 产品卡放在一起',
+      '新增：小类已存在时会自动反查对应大类，分配弹窗会优先推荐该类目',
+      '优化：待分配区批量抓图升级为批量补资料'
+    ]
+  },
   {
     v:'3.5.10', date:'2026-06-21',
     notes:[
