@@ -888,6 +888,7 @@ body.dark .cpal{background:rgba(0,0,0,.7);}
   <div style="margin-top:10px;text-align:center;display:flex;gap:16px;justify-content:center">
     <button onclick="showChangelog()" style="background:transparent;border:0;color:var(--accent);font-size:11.5px;cursor:pointer;text-decoration:underline;font-family:inherit">查看更新日志</button>
     <button onclick="showRatingLog()" style="background:transparent;border:0;color:var(--accent);font-size:11.5px;cursor:pointer;text-decoration:underline;font-family:inherit">星级抓取记录</button>
+    <button onclick="checkHotUpdateNow()" style="background:transparent;border:0;color:var(--accent);font-size:11.5px;cursor:pointer;text-decoration:underline;font-family:inherit">检查小更新</button>
   </div>
   <div class="fa">
     <button class="btn-ok" onclick="saveAppSettings()">完成</button>
@@ -6800,10 +6801,19 @@ function exportPromoAmazonCsv(promoId){
 // 更新日志 (Changelog)
 // 每次发新版，在 CHANGELOG 数组最前面加一条即可。
 // ════════════════════════════════════════════════════════════════
-var APP_VERSION='3.5.13';
+var APP_VERSION='3.5.14';
 // 标题栏自动显示当前版本号（跟随 APP_VERSION，不用手动改）
 try{ document.title = 'Tangzon 产品管理 v' + APP_VERSION; }catch(e){}
 var CHANGELOG=[
+  {
+    v:'3.5.14', date:'2026-06-21',
+    notes:[
+      '新增：桌面版加入在线小更新通道，页面级小修复后可下载小更新包，不必每次重装完整软件',
+      '新增：设置页增加“检查小更新”入口，可手动确认是否有轻量更新',
+      '优化：小更新文件会校验 SHA-256，校验失败会保留当前版本，降低误更新风险',
+      '保留：完整安装包自动更新仍继续作为大版本升级和底层能力更新的兜底'
+    ]
+  },
   {
     v:'3.5.13', date:'2026-06-21',
     notes:[
@@ -7075,6 +7085,23 @@ function showChangelog(){
   openMo('mo-changelog');
 }
 
+function checkHotUpdateNow(){
+  if(!window.electronAPI||!window.electronAPI.checkHotUpdates){
+    toast('当前环境不支持在线小更新');
+    return;
+  }
+  toast('正在检查小更新...');
+  window.electronAPI.checkHotUpdates().then(function(res){
+    if(!res){toast('未收到小更新结果');return;}
+    if(res.ok&&res.applied){toast('小更新已完成');return;}
+    if(res.ok&&res.upToDate){toast('已经是最新小更新');return;}
+    if(res.ok&&res.incompatible){toast('当前小更新不适用于此版本');return;}
+    toast('小更新失败：'+(res.error||res.message||'未知原因'));
+  }).catch(function(e){
+    toast('小更新失败：'+(e&&e.message?e.message:e));
+  });
+}
+
 // 升级后首次打开，自动弹一次"本次更新内容"
 function checkChangelogOnUpdate(){
   try{
@@ -7181,6 +7208,7 @@ function renderCmdPalette(qStr){
     {sec:'操作',label:'新建活动',hint:'',ico:'plus',fn:function(){if(typeof openCreatePromo==='function'){switchTab('promo');setTimeout(openCreatePromo,200);}}},
     {sec:'外观',label:'切换 深色/浅色 模式',hint:'',ico:'sun',fn:toggleDarkMode},
     {sec:'其他',label:'查看更新日志',hint:'',ico:'box',fn:function(){if(typeof showChangelog==='function')showChangelog();}},
+    {sec:'其他',label:'检查小更新',hint:'',ico:'refresh',fn:function(){if(typeof checkHotUpdateNow==='function')checkHotUpdateNow();}},
     {sec:'其他',label:'星级抓取记录',hint:'',ico:'star',fn:function(){if(typeof showRatingLog==='function')showRatingLog();}},
     {sec:'外观',label:'卡片密度 紧凑',hint:'',ico:'grid',fn:function(){setDensity('compact');}},
     {sec:'外观',label:'卡片密度 默认',hint:'',ico:'grid',fn:function(){setDensity('default');}},

@@ -5,6 +5,8 @@
 const { app, BrowserWindow, Menu, Tray, dialog, shell, ipcMain, session, Notification, nativeImage } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const https = require('https');
+const crypto = require('crypto');
 let cheerio = null;
 try { cheerio = require('cheerio'); }
 catch (e) { console.log('cheerio not available; Amazon parser will use renderer fallback:', e.message); }
@@ -38,6 +40,8 @@ let mainWindow = null;
 let tray = null;
 let isQuitting = false;
 let pendingFileArg = null;
+const BUILTIN_HTML_FILE = 'Tangzon_产品管理_个人版本.html';
+const HOT_UPDATE_MANIFEST_URL = process.env.TANGZON_HOT_UPDATE_URL || 'https://raw.githubusercontent.com/Jw10303311/tangzon-app/main/hot-update.json';
 
 // ── 数据目录管理 ───────────────────────────────────────────
 const isPortable = !!process.env.PORTABLE_EXECUTABLE_DIR;
@@ -72,6 +76,194 @@ function safeBackupName(kind) {
   const ts = new Date().toISOString().replace(/[:.]/g, '-');
   const label = String(kind || 'manual').replace(/[^a-z0-9_-]/gi, '_').slice(0, 40) || 'manual';
   return `Tangzon_${label}_${ts}.json`;
+}
+function getHotUpdateDir() {
+  return path.join(app.getPath('userData'), 'hot-update');
+}
+function getHotManifestPath() {
+  return path.join(getHotUpdateDir(), 'manifest.json');
+}
+function getHotHtmlPath() {
+  return path.join(getHotUpdateDir(), 'current.html');
+}
+function loadHotManifest() {
+  try {
+    const p = getHotManifestPath();
+    if (fs.existsSync(p)) return JSON.parse(fs.readFileSync(p, 'utf-8'));
+  } catch (e) {
+    console.error('Hot update manifest read failed:', e);
+  }
+  return null;
+}
+function saveHotManifest(manifest) {
+  const dir = getHotUpdateDir();
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(getHotManifestPath(), JSON.stringify(manifest, null, 2));
+}
+function resolveAppHtmlPath() {
+  const manifest = loadHotManifest();
+  const hotHtml = getHotHtmlPath();
+  if (manifest && manifest.active && fs.existsSync(hotHtml)) return hotHtml;
+  return path.join(__dirname, BUILTIN_HTML_FILE);
+}
+function compareVersions(a, b) {
+  const pa = String(a || '').split(/[^0-9]+/).filter(Boolean).map(Number);
+  const pb = String(b || '').split(/[^0-9]+/).filter(Boolean).map(Number);
+  const len = Math.max(pa.length, pb.length, 3);
+  for (let i = 0; i < len; i++) {
+    const da = pa[i] || 0;
+    const db = pb[i] || 0;
+    if (da > db) return 1;
+    if (da < db) return -1;
+  }
+  return 0;
+}
+function fetchHttpsBuffer(url, maxBytes = 1024 * 1024, redirects = 3) {
+  return new Promise((resolve, reject) => {
+    let parsed;
+    try { parsed = new URL(url); }
+    catch (e) { reject(new Error('invalid_url')); return; }
+    if (parsed.protocol !== 'https:') {
+      reject(new Error('only_https_allowed'));
+      return;
+    }
+    const req = https.get(parsed, { headers: { 'User-Agent': `Tangzon/${app.getVersion()}` } }, (res) => {
+      if ([301, 302, 303, 307, 308].includes(res.statusCode) && res.headers.location) {
+        res.resume();
+        if (redirects <= 0) { reject(new Error('too_many_redirects')); return; }
+        const nextUrl = new URL(res.headers.location, parsed).toString();
+        fetchHttpsBuffer(nextUrl, maxBytes, redirects - 1).then(resolve, reject);
+        return;
+      }
+      if (res.statusCode < 200 || res.statusCode >= 300) {
+        res.resume();
+        reject(new Error(`http_${res.statusCode}`));
+        return;
+      }
+      const chunks = [];
+      let size = 0;
+      res.on('data', (chunk) => {
+        size += chunk.length;
+        if (size > maxBytes) {
+          req.destroy(new Error('file_too_large'));
+          return;
+        }
+        chunks.push(chunk);
+      });
+      res.on('end', () => resolve(Buffer.concat(chunks)));
+    });
+    req.setTimeout(15000, () => req.destroy(new Error('request_timeout')));
+    req.on('error', reject);
+  });
+}
+function sha256(buf) {
+  return crypto.createHash('sha256').update(buf).digest('hex');
+}
+function pickHotHtmlFile(manifest) {
+  if (manifest && Array.isArray(manifest.files)) {
+    return manifest.files.find(f => f && (f.name === BUILTIN_HTML_FILE || /\.html?$/i.test(String(f.name || ''))));
+  }
+  if (manifest && manifest.htmlUrl) return { name: BUILTIN_HTML_FILE, url: manifest.htmlUrl, sha256: manifest.sha256 };
+  return null;
+}
+function getHotUpdateInfo() {
+  const manifest = loadHotManifest();
+  return {
+    active: !!(manifest && manifest.active && fs.existsSync(getHotHtmlPath())),
+    version: manifest && manifest.version ? manifest.version : '',
+    installedAt: manifest && manifest.installedAt ? manifest.installedAt : '',
+    source: manifest && manifest.source ? manifest.source : ''
+  };
+}
+async function clearHotUpdate() {
+  try {
+    const hotHtml = getHotHtmlPath();
+    const hotManifest = getHotManifestPath();
+    if (fs.existsSync(hotHtml)) fs.unlinkSync(hotHtml);
+    if (fs.existsSync(hotManifest)) fs.unlinkSync(hotManifest);
+    if (mainWindow) mainWindow.loadFile(path.join(__dirname, BUILTIN_HTML_FILE));
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e.message };
+  }
+}
+async function checkHotUpdate(silent = false) {
+  const cfg = loadConfig();
+  const manifestUrl = cfg.hotUpdateUrl || HOT_UPDATE_MANIFEST_URL;
+  try {
+    const manifestBuf = await fetchHttpsBuffer(manifestUrl, 512 * 1024);
+    const remote = JSON.parse(manifestBuf.toString('utf-8'));
+    if (!remote || remote.enabled === false) return { ok: true, upToDate: true, message: 'hot_update_disabled' };
+
+    const appVersion = app.getVersion();
+    if (remote.minAppVersion && compareVersions(appVersion, remote.minAppVersion) < 0) {
+      return { ok: true, incompatible: true, message: 'need_full_update' };
+    }
+    if (remote.maxAppVersion && compareVersions(appVersion, remote.maxAppVersion) > 0) {
+      return { ok: true, incompatible: true, message: 'hot_update_not_for_this_version' };
+    }
+
+    const local = loadHotManifest();
+    if (local && local.version && remote.version && local.version === remote.version && fs.existsSync(getHotHtmlPath())) {
+      return { ok: true, upToDate: true, version: local.version };
+    }
+
+    const htmlFile = pickHotHtmlFile(remote);
+    if (!remote.version || !htmlFile || !htmlFile.url || !htmlFile.sha256) {
+      return { ok: false, error: 'hot_update_manifest_incomplete' };
+    }
+
+    const htmlBuf = await fetchHttpsBuffer(htmlFile.url, 12 * 1024 * 1024);
+    const actualHash = sha256(htmlBuf);
+    if (String(actualHash).toLowerCase() !== String(htmlFile.sha256).toLowerCase()) {
+      return { ok: false, error: 'hot_update_hash_mismatch' };
+    }
+    const htmlText = htmlBuf.toString('utf-8');
+    if (!/Tangzon/i.test(htmlText) || !/APP_VERSION\s*=/.test(htmlText)) {
+      return { ok: false, error: 'hot_update_html_invalid' };
+    }
+
+    const dir = getHotUpdateDir();
+    fs.mkdirSync(dir, { recursive: true });
+    const tmp = path.join(dir, `current.${Date.now()}.tmp`);
+    fs.writeFileSync(tmp, htmlBuf);
+    const hotHtml = getHotHtmlPath();
+    if (fs.existsSync(hotHtml)) fs.unlinkSync(hotHtml);
+    fs.renameSync(tmp, hotHtml);
+    const installed = {
+      active: true,
+      version: remote.version,
+      minAppVersion: remote.minAppVersion || '',
+      maxAppVersion: remote.maxAppVersion || '',
+      notes: Array.isArray(remote.notes) ? remote.notes : [],
+      source: manifestUrl,
+      installedAt: new Date().toISOString()
+    };
+    saveHotManifest(installed);
+
+    if (silent) {
+      if (Notification.isSupported()) {
+        new Notification({ title: 'Tangzon 小更新已准备好', body: `v${remote.version} 已下载，下次打开后自动生效。` }).show();
+      }
+    } else if (mainWindow) {
+      const ans = await dialog.showMessageBox(mainWindow, {
+        type: 'info',
+        buttons: ['稍后', '现在刷新'],
+        defaultId: 1,
+        cancelId: 0,
+        title: '小更新已完成',
+        message: `已安装小更新 v${remote.version}`,
+        detail: '刷新后立即使用新版界面；你的产品数据不会被清空。'
+      });
+      if (ans.response === 1 && mainWindow) mainWindow.loadFile(resolveAppHtmlPath());
+    }
+    return { ok: true, applied: true, version: remote.version, notes: installed.notes };
+  } catch (e) {
+    if (!silent) {
+      dialog.showErrorBox('小更新检查失败', e.message || String(e));
+    }
+    return { ok: false, error: e.message || String(e) };
+  }
 }
 function parseAmazonHtmlWithCheerio(html) {
   if (!cheerio || !html || html.length < 500) return { ok: false, reason: 'cheerio_unavailable' };
@@ -158,7 +350,7 @@ function createWindow(showImmediately = true) {
     autoHideMenuBar: false,
     icon: path.join(__dirname, 'icon.png')
   });
-  mainWindow.loadFile(path.join(__dirname, 'Tangzon_产品管理_个人版本.html'));
+  mainWindow.loadFile(resolveAppHtmlPath());
 
   mainWindow.on('close', (e) => {
     if (!isQuitting && getSettings().minToTray) {
@@ -332,6 +524,9 @@ ipcMain.handle('open-external', (event, url) => {
   return false;
 });
 ipcMain.handle('check-updates', () => checkForUpdates(false));
+ipcMain.handle('check-hot-updates', () => checkHotUpdate(false));
+ipcMain.handle('get-hot-update-info', () => getHotUpdateInfo());
+ipcMain.handle('clear-hot-update', () => clearHotUpdate());
 ipcMain.handle('set-always-on-top', (event, on) => {
   if (mainWindow) {
     mainWindow.setAlwaysOnTop(!!on);
@@ -553,6 +748,8 @@ app.whenReady().then(() => {
 
   // 自动更新：启动 8 秒后静默检查一次，之后每 4 小时检查一次
   setupAutoUpdater();
+  setTimeout(() => checkHotUpdate(true), 5000);
+  setInterval(() => checkHotUpdate(true), 2 * 60 * 60 * 1000);
   setTimeout(() => checkForUpdates(true), 8000);
   setInterval(() => checkForUpdates(true), 4 * 60 * 60 * 1000);
 
