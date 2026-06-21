@@ -5,6 +5,9 @@
 const { app, BrowserWindow, Menu, Tray, dialog, shell, ipcMain, session, Notification, nativeImage } = require('electron');
 const path = require('path');
 const fs = require('fs');
+let cheerio = null;
+try { cheerio = require('cheerio'); }
+catch (e) { console.log('cheerio not available; Amazon parser will use renderer fallback:', e.message); }
 
 // 自动更新（从 GitHub Release 检测新版本）
 let autoUpdater = null;
@@ -56,6 +59,70 @@ function saveConfig(cfg) {
 function getDataDir() { const cfg = loadConfig(); return cfg.dataDir || getDefaultDataDir(); }
 function setDataDir(p) { const cfg = loadConfig(); cfg.dataDir = p; saveConfig(cfg); }
 function ensureDataDir() { const d = getDataDir(); if (!fs.existsSync(d)) fs.mkdirSync(d, { recursive: true }); return d; }
+function getBackupDir() {
+  const cfg = loadConfig();
+  return cfg.backupDir || path.join(app.getPath('documents'), 'Tangzon Backups');
+}
+function ensureBackupDir() {
+  const d = getBackupDir();
+  if (!fs.existsSync(d)) fs.mkdirSync(d, { recursive: true });
+  return d;
+}
+function safeBackupName(kind) {
+  const ts = new Date().toISOString().replace(/[:.]/g, '-');
+  const label = String(kind || 'manual').replace(/[^a-z0-9_-]/gi, '_').slice(0, 40) || 'manual';
+  return `Tangzon_${label}_${ts}.json`;
+}
+function parseAmazonHtmlWithCheerio(html) {
+  if (!cheerio || !html || html.length < 500) return { ok: false, reason: 'cheerio_unavailable' };
+  if (/Robot Check|To discuss automated access|api-services-support@amazon/i.test(html)) {
+    return { ok: true, data: { error: 'robot_check' } };
+  }
+  const $ = cheerio.load(html);
+  const data = {};
+  const cleanNum = (s) => {
+    const n = parseFloat(String(s || '').replace(/&nbsp;/g, ' ').replace(/,/g, '').replace(/[^0-9.]/g, ''));
+    return Number.isFinite(n) && n > 0 ? Math.round(n * 100) / 100 : null;
+  };
+  const starText =
+    $('#averageCustomerReviews .a-icon-alt').first().text() ||
+    $('#acrPopover .a-icon-alt').first().text() ||
+    $('[data-hook="rating-out-of-text"]').first().text();
+  const starMatch = String(starText || '').match(/([0-9.]+)\s*out of 5/i);
+  if (starMatch) {
+    const v = parseFloat(starMatch[1]);
+    if (v >= 1 && v <= 5) data.star = v;
+  }
+  const reviewText =
+    $('#acrCustomerReviewText').first().text() ||
+    $('[data-hook="total-review-count"]').first().text();
+  const reviewMatch = String(reviewText || '').match(/([0-9,]+)/);
+  if (reviewMatch) {
+    const r = parseInt(reviewMatch[1].replace(/,/g, ''), 10);
+    if (Number.isFinite(r) && r >= 0 && r < 10000000) data.ratings = r;
+  }
+  if (data.star !== undefined && (data.ratings === undefined || data.ratings === 0)) delete data.star;
+  const priceCandidates = [
+    $('#corePrice_feature_div .a-offscreen').first().text(),
+    $('#apex_desktop .a-offscreen').first().text(),
+    $('#priceblock_ourprice').first().text(),
+    $('#priceblock_dealprice').first().text(),
+    $('#priceblock_saleprice').first().text()
+  ];
+  for (const p of priceCandidates) {
+    const v = cleanNum(p);
+    if (v) { data.price = v; break; }
+  }
+  const img =
+    $('meta[property="og:image"]').attr('content') ||
+    $('meta[name="twitter:image"]').attr('content') ||
+    $('#landingImage').attr('data-old-hires') ||
+    $('#landingImage').attr('src') ||
+    $('#imgBlkFront').attr('src') ||
+    $('#ebooksImgBlkFront').attr('src');
+  if (img && !/placeholder|transparent-pixel/i.test(img)) data.img = img.replace(/&amp;/g, '&');
+  return { ok: true, data };
+}
 function getSettings() {
   const cfg = loadConfig();
   return {
@@ -280,6 +347,8 @@ ipcMain.handle('get-always-on-top', () => {
 ipcMain.handle('get-app-version', () => app.getVersion());
 ipcMain.handle('get-data-dir', () => getDataDir());
 ipcMain.handle('open-data-dir', () => shell.openPath(getDataDir()));
+ipcMain.handle('get-backup-dir', () => ensureBackupDir());
+ipcMain.handle('open-backup-dir', () => shell.openPath(ensureBackupDir()));
 ipcMain.handle('is-electron', () => true);
 ipcMain.handle('get-settings', () => getSettings());
 ipcMain.handle('save-settings', (event, updates) => {
@@ -298,6 +367,57 @@ ipcMain.handle('quit-app', () => { isQuitting = true; app.quit(); });
 ipcMain.handle('read-file', (event, filePath) => {
   try { return { ok: true, content: fs.readFileSync(filePath, 'utf-8'), path: filePath }; }
   catch (e) { return { ok: false, error: e.message }; }
+});
+ipcMain.handle('save-backup-json', (event, payload) => {
+  try {
+    const dir = ensureBackupDir();
+    const filePath = path.join(dir, safeBackupName(payload && payload.kind));
+    const data = payload && payload.data ? payload.data : {};
+    fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf-8');
+    return { ok: true, path: filePath, dir };
+  } catch (e) {
+    return { ok: false, error: e.message };
+  }
+});
+ipcMain.handle('list-backups', () => {
+  try {
+    const dir = ensureBackupDir();
+    const files = fs.readdirSync(dir)
+      .filter(name => /^Tangzon_.*\.json$/i.test(name))
+      .map(name => {
+        const p = path.join(dir, name);
+        const st = fs.statSync(p);
+        return { name, path: p, size: st.size, mtime: st.mtimeMs };
+      })
+      .sort((a, b) => b.mtime - a.mtime);
+    return { ok: true, dir, files };
+  } catch (e) {
+    return { ok: false, error: e.message, files: [] };
+  }
+});
+ipcMain.handle('read-backup-json', (event, filePath) => {
+  try {
+    const dir = path.resolve(ensureBackupDir());
+    const p = path.resolve(String(filePath || ''));
+    if (!p.startsWith(dir)) return { ok: false, error: 'Invalid backup path' };
+    return { ok: true, content: fs.readFileSync(p, 'utf-8'), path: p };
+  } catch (e) {
+    return { ok: false, error: e.message };
+  }
+});
+ipcMain.handle('parse-amazon-html', (event, html) => {
+  try { return parseAmazonHtmlWithCheerio(String(html || '')); }
+  catch (e) { return { ok: false, error: e.message }; }
+});
+ipcMain.handle('get-spapi-settings', () => {
+  const cfg = loadConfig();
+  return cfg.spApi || { enabled: false, region: 'eu', marketplaceId: 'A1F83G8C2ARO7P' };
+});
+ipcMain.handle('save-spapi-settings', (event, updates) => {
+  const cfg = loadConfig();
+  cfg.spApi = Object.assign({ enabled: false, region: 'eu', marketplaceId: 'A1F83G8C2ARO7P' }, cfg.spApi || {}, updates || {});
+  saveConfig(cfg);
+  return cfg.spApi;
 });
 
 

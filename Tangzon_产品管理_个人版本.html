@@ -801,11 +801,29 @@ body.dark .cpal{background:rgba(0,0,0,.7);}
     </label>
   </div>
   <div class="fg" style="padding:12px;background:var(--sur2);border-radius:8px;margin-top:8px">
+    <div style="font-weight:600;color:var(--tx);font-size:13px">数据保护</div>
+    <div id="backup-dir-label" style="font-size:11px;color:var(--tx3);margin-top:2px;line-height:1.5">自动备份每天保存一次；导入、清空、批量淘汰前会生成恢复点。</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:9px">
+      <button class="btn-c" onclick="manualAutoBackup()" style="font-size:10.5px">立即备份</button>
+      <button class="btn-c" onclick="restoreLatestBackup()" style="font-size:10.5px;color:var(--accent);border-color:var(--accent-bor)">恢复最近备份</button>
+      <button class="btn-c" onclick="openBackupFolder()" style="font-size:10.5px">打开备份文件夹</button>
+    </div>
+  </div>
+  <div class="fg" style="padding:12px;background:var(--sur2);border-radius:8px;margin-top:8px">
+    <div style="font-weight:600;color:var(--tx);font-size:13px">图片管理</div>
+    <div id="img-health-summary" style="font-size:11px;color:var(--tx3);margin-top:2px;line-height:1.5">点击体检查看缺图、缓存数量和可清理项。</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:9px">
+      <button class="btn-c" onclick="showImageHealth()" style="font-size:10.5px;color:var(--accent);border-color:var(--accent-bor)">图片体检</button>
+      <button class="btn-c" onclick="cleanImageCache()" style="font-size:10.5px">清理无用缓存</button>
+      <button class="btn-c" onclick="batchAutoFetchImgs()" style="font-size:10.5px">批量抓缺图</button>
+    </div>
+  </div>
+  <div class="fg" style="padding:12px;background:var(--sur2);border-radius:8px;margin-top:8px">
     <div style="display:flex;align-items:center;gap:10px">
       <input type="checkbox" id="set-auto-rating" style="width:16px;height:16px;cursor:pointer">
       <label for="set-auto-rating" style="flex:1;cursor:pointer;font-size:13px">
-        <div style="font-weight:600;color:var(--tx)">自动更新星级 / 评论数（实验性）</div>
-        <div style="font-size:11px;color:var(--tx3);margin-top:2px">后台每天慢速抓取约 50 个产品。成功率受 Amazon 反爬影响。</div>
+        <div style="font-weight:600;color:var(--tx)">自动更新星级 / 评论数 / 价格（实验性）</div>
+        <div style="font-size:11px;color:var(--tx3);margin-top:2px">后台每天慢速抓取约 50 个产品，只查 Amazon UK；遇到反爬会自动退避。</div>
       </label>
     </div>
     <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
@@ -824,6 +842,19 @@ body.dark .cpal{background:rgba(0,0,0,.7);}
     </div>
     <div style="margin-top:8px;text-align:right">
       <button onclick="previewRatingTargets()" style="background:transparent;border:0;color:var(--accent);font-size:11px;cursor:pointer;text-decoration:underline;font-family:inherit;padding:0">预览今日会抓哪些产品 →</button>
+    </div>
+  </div>
+  <div class="fg" style="padding:12px;background:var(--sur2);border-radius:8px;margin-top:8px">
+    <div style="display:flex;align-items:center;gap:10px">
+      <input type="checkbox" id="set-spapi-enabled" style="width:16px;height:16px;cursor:pointer">
+      <label for="set-spapi-enabled" style="flex:1;cursor:pointer;font-size:13px">
+        <div style="font-weight:600;color:var(--tx)">Amazon SP-API 官方接口入口</div>
+        <div style="font-size:11px;color:var(--tx3);margin-top:2px">预留官方数据同步入口；当前只保存开关和 Marketplace，不保存密钥。</div>
+      </label>
+    </div>
+    <div style="margin-top:10px">
+      <label class="fl" style="font-size:10.5px">Marketplace ID</label>
+      <input class="fi" id="set-spapi-marketplace" placeholder="A1F83G8C2ARO7P" style="font-size:11.5px;padding:6px 8px">
     </div>
   </div>
   <div style="margin-top:14px;padding:10px;background:var(--accent-bg);border-radius:7px;font-size:11px;color:var(--tx2);line-height:1.6">
@@ -1063,6 +1094,30 @@ var REVIEW_HIST={};
 // IndexedDB layer for IMGS (persistent image storage > 5MB limit)
 // ════════════════════════════════════════════════════════════════
 var _db=null,_imgFlushTimer=null,_idbReady=false,_idbFailed=false;
+var _dexieDb=null,_dexieReady=false;
+
+function loadOptionalDexie(){
+  try{
+    if(typeof Dexie!=='undefined'){initDexieOptional();return;}
+    var s=document.createElement('script');
+    s.src='node_modules/dexie/dist/dexie.min.js';
+    s.onload=function(){initDexieOptional();};
+    s.onerror=function(){console.warn('[Dexie] optional helper not installed');};
+    document.head.appendChild(s);
+  }catch(e){console.warn('[Dexie] load skipped:',e);}
+}
+
+function initDexieOptional(){
+  try{
+    if(typeof Dexie==='undefined')return;
+    _dexieDb=new Dexie('tangzon_helper_v1');
+    _dexieDb.version(1).stores({
+      opLogs:'++id,ts,type,asin',
+      backupIndex:'++id,ts,path,kind'
+    });
+    _dexieDb.open().then(function(){_dexieReady=true;}).catch(function(e){console.warn('[Dexie] unavailable:',e);});
+  }catch(e){console.warn('[Dexie] init skipped:',e);}
+}
 
 function openIDB(){
   return new Promise(function(resolve,reject){
@@ -1564,21 +1619,103 @@ function _tryFetchPage(proxy, domain, asin){
 }
 
 // In Electron, webSecurity:false allows direct cross-origin fetches.
-// We can hit Amazon directly without any proxy, which is 5-10x faster and more reliable.
+// Safe mode: desktop app only fetches amazon.co.uk directly, with cache + robot-check backoff.
 function _isElectronEnv(){return !!(window.electronAPI && window.electronAPI.isElectron);}
-function _scrapeDirectFromAmazon(asin, domain){
-  var url='https://www.'+domain+'/dp/'+asin;
-  return fetch(url,{
+var _AMZ_PAGE_CACHE={};
+var _AMZ_ROBOT_UNTIL=0;
+setInterval(function(){
+  var now=Date.now();
+  Object.keys(_AMZ_PAGE_CACHE).forEach(function(a){if(now-(_AMZ_PAGE_CACHE[a].t||0)>15*60*1000)delete _AMZ_PAGE_CACHE[a];});
+},10*60*1000);
+function _amazonUrl(asin){return 'https://www.amazon.co.uk/dp/'+asin+'?th=1&psc=1';}
+function _fetchAmazonPageSafe(asin){
+  asin=(asin||'').trim().toUpperCase();
+  if(!/^[A-Z0-9]{10,12}$/.test(asin))return Promise.resolve(null);
+  var now=Date.now();
+  if(_AMZ_ROBOT_UNTIL&&now<_AMZ_ROBOT_UNTIL)return Promise.resolve({error:'robot_check'});
+  var cached=_AMZ_PAGE_CACHE[asin];
+  if(cached&&cached.t&&now-cached.t<10*60*1000)return cached.promise;
+  var controller=(typeof AbortController!=='undefined')?new AbortController():null;
+  var timer=controller?setTimeout(function(){try{controller.abort();}catch(e){}},15000):null;
+  var p=fetch(_amazonUrl(asin),{
     method:'GET',
+    credentials:'omit',
+    cache:'no-store',
+    signal:controller?controller.signal:undefined,
     headers:{
       'Accept':'text/html,application/xhtml+xml,*/*',
-      'Accept-Language':'en-US,en;q=0.9',
+      'Accept-Language':'en-GB,en;q=0.9',
       'User-Agent':'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
     }
-  }).then(function(r){return r.ok?r.text():null;}).then(function(t){
+  }).then(function(r){return r&&r.ok?r.text():null;}).then(function(t){
+    if(timer)clearTimeout(timer);
     if(!t)return null;
-    return _extractImgFromHtml(t);
-  }).catch(function(e){return null;});
+    if(/Robot Check|To discuss automated access|api-services-support@amazon/i.test(t)){
+      _AMZ_ROBOT_UNTIL=Date.now()+30*60*1000;
+      return {error:'robot_check'};
+    }
+    return {html:t,url:_amazonUrl(asin)};
+  }).catch(function(e){if(timer)clearTimeout(timer);return null;});
+  _AMZ_PAGE_CACHE[asin]={t:now,promise:p};
+  return p;
+}
+function _parsePriceNumber(s){
+  if(!s)return null;
+  var n=parseFloat(String(s).replace(/&nbsp;/g,' ').replace(/,/g,'').replace(/[^0-9.]/g,''));
+  return isNaN(n)||n<=0?null:Math.round(n*100)/100;
+}
+function _extractPriceFromHtml(htmlText){
+  if(!htmlText||htmlText.length<500)return null;
+  var jm=htmlText.match(/"priceAmount"\s*:\s*([0-9.]+)/i);
+  if(jm){var jv=_parsePriceNumber(jm[1]);if(jv)return jv;}
+  var dm=htmlText.match(/"displayPrice"\s*:\s*"[^0-9"]*([0-9,.]+)/i);
+  if(dm){var dv=_parsePriceNumber(dm[1]);if(dv)return dv;}
+  var anchors=[/id=["']corePrice_feature_div["']/i,/id=["']apex_desktop["']/i,/id=["']priceblock_ourprice["']/i,/id=["']priceblock_dealprice["']/i,/id=["']priceblock_saleprice["']/i];
+  for(var a=0;a<anchors.length;a++){
+    var am=htmlText.match(anchors[a]);
+    if(am&&am.index!==undefined){
+      var w=htmlText.substr(am.index,3500);
+      var off=w.match(/<span[^>]*class=["'][^"']*a-offscreen[^"']*["'][^>]*>\s*£\s*([0-9,.]+)/i);
+      if(off){var ov=_parsePriceNumber(off[1]);if(ov)return ov;}
+      var whole=w.match(/<span[^>]*class=["'][^"']*a-price-whole[^"']*["'][^>]*>\s*([0-9,]+)/i);
+      var frac=w.match(/<span[^>]*class=["'][^"']*a-price-fraction[^"']*["'][^>]*>\s*([0-9]{2})/i);
+      if(whole){var pv=_parsePriceNumber(whole[1]+'.'+(frac?frac[1]:'00'));if(pv)return pv;}
+    }
+  }
+  var pb=htmlText.match(/id=["']priceblock_(?:ourprice|dealprice|saleprice)["'][^>]*>\s*£\s*([0-9,.]+)/i);
+  return pb?_parsePriceNumber(pb[1]):null;
+}
+function _extractAmazonDetailsFromHtml(htmlText){
+  if(!htmlText||htmlText.length<2000)return null;
+  if(/Robot Check|api-services-support@amazon/i.test(htmlText))return {error:'robot_check'};
+  var out={};
+  var rating=_extractRatingFromHtml(htmlText);
+  if(rating&&rating.error)return rating;
+  if(rating){
+    if(rating.star!==undefined)out.star=rating.star;
+    if(rating.ratings!==undefined)out.ratings=rating.ratings;
+  }
+  var img=_extractImgFromHtml(htmlText);
+  if(img&&img.url)out.img=img.url;
+  var price=_extractPriceFromHtml(htmlText);
+  if(price!==null)out.price=price;
+  return Object.keys(out).length?out:null;
+}
+function _parseAmazonDetails(htmlText){
+  var fallback=_extractAmazonDetailsFromHtml(htmlText);
+  if(window.electronAPI&&window.electronAPI.parseAmazonHtml){
+    return window.electronAPI.parseAmazonHtml(htmlText).then(function(res){
+      if(res&&res.ok&&res.data&&Object.keys(res.data).length)return res.data;
+      return fallback;
+    }).catch(function(){return fallback;});
+  }
+  return Promise.resolve(fallback);
+}
+function _scrapeDirectFromAmazon(asin, domain){
+  return _fetchAmazonPageSafe(asin).then(function(res){
+    if(!res||res.error)return res;
+    return _extractImgFromHtml(res.html);
+  });
 }
 
 // Fallback path: scrape product page via CORS proxies, trying multiple regions.
@@ -1651,8 +1788,8 @@ function fetchAmazonImg(asin){
         var di=0;
         function tryDirect(){
           if(di>=domains.length){
-            if(debug)console.log('[fetchImg] '+asin+': direct fetch all failed, trying proxies…');
-            return _scrapeAmazonImg(asin, debug);  // last resort: proxies
+            if(debug)console.log('[fetchImg] '+asin+': direct fetch failed; proxy fallback disabled in desktop safe mode');
+            return Promise.resolve(null);
           }
           var d=domains[di++];
           return _scrapeDirectFromAmazon(asin,d).then(function(res){
@@ -1690,6 +1827,43 @@ function updateBatchImgBadge(){
   if(!el)return;
   if(missing>0){el.textContent=missing;el.style.display='inline-block';}
   else{el.style.display='none';}
+}
+function getImageHealth(){
+  var productAsins={},missing=[],total=0;
+  Object.keys(DATA||{}).forEach(function(c){Object.keys(DATA[c]||{}).forEach(function(s){
+    (DATA[c][s]||[]).forEach(function(it){if(!it||!it.asin)return;total++;productAsins[it.asin]=1;if(!getImg(it.asin))missing.push(it.asin);});
+  });});
+  (UNASSIGNED||[]).forEach(function(it){if(it&&it.asin){productAsins[it.asin]=1;if(!(it.img||getImg(it.asin)))missing.push(it.asin);}});
+  Object.keys(RETIRED||{}).forEach(function(asin){productAsins[asin]=1;});
+  var cacheKeys=Object.keys(IMGS||{}),orphan=[],bytes=0;
+  cacheKeys.forEach(function(a){
+    var v=IMGS[a]||'';
+    bytes+=String(v).length;
+    if(!productAsins[a])orphan.push(a);
+  });
+  return {total:total,missing:missing,cache:cacheKeys.length,orphan:orphan,bytes:bytes};
+}
+function _fmtBytes(n){
+  if(!n)return '0 KB';
+  var kb=n/1024;if(kb<1024)return Math.round(kb)+' KB';
+  return (kb/1024).toFixed(1)+' MB';
+}
+function showImageHealth(silent){
+  var h=getImageHealth();
+  var el=q('img-health-summary');
+  var msg='产品 '+h.total+' 个 · 缺图 '+h.missing.length+' 个 · 图片缓存 '+h.cache+' 张 · 约 '+_fmtBytes(h.bytes)+' · 可清理 '+h.orphan.length+' 张';
+  if(el)el.textContent=msg;
+  if(!silent)toast(msg);
+}
+function cleanImageCache(){
+  var h=getImageHealth();
+  if(!h.orphan.length){toast('没有发现无用图片缓存');showImageHealth();return;}
+  if(!confirm('清理 '+h.orphan.length+' 张无用图片缓存？\n这些图片不属于当前产品库、淘汰列表或待分配区。'))return;
+  h.orphan.forEach(function(a){delete IMGS[a];});
+  if(typeof scheduleImgFlush==='function')scheduleImgFlush();
+  markDirty();save();
+  showImageHealth(true);
+  toast('✓ 已清理 '+h.orphan.length+' 张无用图片缓存');
 }
 
 // Called from the product edit modal "🪄 自动抓图" button
@@ -2454,8 +2628,10 @@ function reorderKeys(type, parentCat, srcKey, tgtKey, insertAbove){
   setTimeout(checkBackupReminder, 1500);
   if(typeof updatePromoTabBadge==='function')updatePromoTabBadge();
   setTimeout(function(){if(typeof updateBatchImgBadge==='function')updateBatchImgBadge();},800);
+  setTimeout(function(){if(typeof runDailyAutoBackup==='function')runDailyAutoBackup();},2200);
   // Boot IndexedDB for images (async, non-blocking)
   setTimeout(function(){if(typeof initIDB==='function')initIDB();},50);
+  setTimeout(function(){if(typeof loadOptionalDexie==='function')loadOptionalDexie();},120);
   setTimeout(function(){if(typeof updateBatchImgBadge==='function')updateBatchImgBadge();},1500);
 })();
 
@@ -2912,7 +3088,10 @@ function renderGrid(){
 
 var _dragSrcAsin=null;
 var _dragGroup=[];  // REQ5: list of asins being dragged together
+var _dragOverCard=null;
 function initCardDrag(grid){
+  if(!grid||grid._cardDragReady)return;
+  grid._cardDragReady=true;
   grid.addEventListener('dragstart',function(e){
     var card=e.target.closest('.pc[data-drag-asin]');
     if(!card)return;
@@ -2935,23 +3114,30 @@ function initCardDrag(grid){
     },0);
   });
   grid.addEventListener('dragend',function(e){
-    grid.querySelectorAll('.pc').forEach(function(c){c.style.opacity='';});
+    grid.querySelectorAll('.pc').forEach(function(c){c.style.opacity='';c.style.outline='';});
+    _dragOverCard=null;
     window._internalDragActive=false;  // REQ1
   });
   grid.addEventListener('dragover',function(e){
     e.preventDefault();
     var card=e.target.closest('.pc[data-drag-asin]');
-    grid.querySelectorAll('.pc').forEach(function(c){c.style.outline='';});
+    if(card===_dragOverCard)return;
+    if(_dragOverCard)_dragOverCard.style.outline='';
+    _dragOverCard=card;
     if(card&&_dragGroup.indexOf(card.getAttribute('data-asin'))<0)
       card.style.outline='2px solid var(--blue)';
   });
   grid.addEventListener('dragleave',function(e){
-    if(!grid.contains(e.relatedTarget))
-      grid.querySelectorAll('.pc').forEach(function(c){c.style.outline='';});
+    if(!grid.contains(e.relatedTarget)){
+      if(_dragOverCard)_dragOverCard.style.outline='';
+      _dragOverCard=null;
+    }
   });
   grid.addEventListener('drop',function(e){
     e.preventDefault();
-    grid.querySelectorAll('.pc').forEach(function(c){c.style.outline='';c.style.opacity='';});
+    grid.querySelectorAll('.pc').forEach(function(c){c.style.opacity='';});
+    if(_dragOverCard)_dragOverCard.style.outline='';
+    _dragOverCard=null;
     var card=e.target.closest('.pc[data-drag-asin]');
     if(!card){_dragSrcAsin=null;_dragGroup=[];return;}
     var targetAsin=card.getAttribute('data-asin');
@@ -3003,7 +3189,14 @@ function setupObserver(){
     });
   }, {rootMargin: '200px'});
 }
-function lazyLoadImages(){if(!_observer){document.querySelectorAll('.p-img[data-asin]').forEach(function(el){var img=getImg(el.getAttribute('data-asin'));if(img)el.innerHTML='<img src="'+img+'" loading="lazy" alt="">';});return;}document.querySelectorAll('.p-img[data-asin]').forEach(function(el){_observer.observe(el);});}
+function lazyLoadImages(){
+  if(!_observer){
+    document.querySelectorAll('.p-img[data-asin]').forEach(function(el){var img=getImg(el.getAttribute('data-asin'));if(img)el.innerHTML='<img src="'+img+'" loading="lazy" alt="">';});
+    return;
+  }
+  _observer.disconnect();
+  document.querySelectorAll('.p-img[data-asin]').forEach(function(el){_observer.observe(el);});
+}
 
 function getItems(){
   var items;
@@ -3614,6 +3807,7 @@ function _renderJsonCats(cats,counts){
 }
 function _applyFullJsonImport(d){
   var isBundle=d&&d.DATA;
+  createRestorePoint('before-json-full-import');
   if(isBundle){
     DATA=d.DATA||{};
     STARRED=d.STARRED||{};
@@ -3639,6 +3833,7 @@ function _applyFullJsonImport(d){
 function _applySelectedJsonImport(d,cats){
   var src=_jsonProductData(d);
   if(!cats.length){toast('请至少选择一个类目');return;}
+  createRestorePoint('before-json-category-import');
   cats.forEach(function(c){DATA[c]=src[c];});
   var asins=_collectAsinsFromCats(src,cats),asinSet={};
   asins.forEach(function(a){asinSet[a]=1;removeRetiredIfInLibrary(a);});
@@ -3720,6 +3915,7 @@ function importProductCsv(text,clearFirst){
     DATA={};
   }
   var up=0,add=0,imgAdded=0;
+  createRestorePoint('before-product-import');
   lines.slice(1).forEach(function(line){
     if(!line.trim())return;
     var cols=parseRow(line);
@@ -3954,6 +4150,7 @@ function cleanSalesVal(raw){
 // }
 function clearLibrary(){
   if(!confirm('清空整个产品库？所有产品数据将被删除，不可恢复。'))return;
+  createRestorePoint('before-clear-library');
   DATA={};STARRED={};HIST=[];RETIRED={};SALES_BASE={};SALES_CMP={};REVIEW_HIST={};
   UNASSIGNED=[];_inboxSel=new Set();
   if(typeof IMGS!=='undefined'){Object.keys(IMGS).forEach(function(k){delete IMGS[k];}); try{localStorage.removeItem('tz3_imgs');}catch(e){} if(_idbReady&&!_idbFailed)idbClearImgs().catch(function(e){console.error(e);});}
@@ -4002,10 +4199,10 @@ function exportSelectedJsonCategories(){
   closeMo('mo-json-cats');
   toast('✓ 已导出 '+cats.length+' 个类目 JSON');
 }
-function exportJson(){
-  q('exp-menu').classList.remove('on');
-  var bundle={
+function buildBackupBundle(kind){
+  return {
     _version:APP_VERSION,
+    _backupKind:kind||'manual',
     _exported:new Date().toISOString(),
     DATA:DATA,
     STARRED:STARRED,
@@ -4022,6 +4219,61 @@ function exportJson(){
     UNASSIGNED:UNASSIGNED,
     RATING_LOG:RATING_LOG
   };
+}
+function saveBackupFile(kind,silent){
+  if(!window.electronAPI||!window.electronAPI.saveBackupJson){
+    if(!silent)exportJson();
+    return Promise.resolve({ok:false,error:'electron-unavailable'});
+  }
+  return window.electronAPI.saveBackupJson(kind||'manual',buildBackupBundle(kind)).then(function(res){
+    if(res&&res.ok){
+      localStorage.setItem('tz3_last_export',String(Date.now()));
+      if(kind==='auto')localStorage.setItem('tz3_last_auto_backup_day',new Date().toISOString().slice(0,10));
+      var b=document.getElementById('backup-banner');if(b)b.remove();
+      if(!silent)toast('✓ 已备份到 '+(res.path||'备份文件夹'));
+      if(typeof updateStatusbar==='function')updateStatusbar();
+    }else if(!silent){
+      toast('备份失败: '+((res&&res.error)||'未知错误'));
+    }
+    return res;
+  }).catch(function(e){if(!silent)toast('备份失败: '+e.message);return{ok:false,error:e.message};});
+}
+function createRestorePoint(reason){
+  return saveBackupFile('restore-'+(reason||'change'),true);
+}
+function runDailyAutoBackup(){
+  if(!window.electronAPI||!window.electronAPI.saveBackupJson)return;
+  if(!DATA||!Object.keys(DATA).length)return;
+  var today=new Date().toISOString().slice(0,10);
+  if(localStorage.getItem('tz3_last_auto_backup_day')===today)return;
+  saveBackupFile('auto',true).then(function(res){if(res&&res.ok)toast('✓ 今日自动备份已完成');});
+}
+function manualAutoBackup(){saveBackupFile('manual',false);}
+function openBackupFolder(){
+  if(window.electronAPI&&window.electronAPI.openBackupDir)window.electronAPI.openBackupDir();
+  else toast('桌面版才支持打开备份文件夹');
+}
+function restoreLatestBackup(){
+  if(!window.electronAPI||!window.electronAPI.listBackups){toast('桌面版才支持恢复备份');return;}
+  window.electronAPI.listBackups().then(function(list){
+    var files=(list&&list.files)||[];
+    if(!files.length){toast('还没有可恢复的备份');return;}
+    var f=files[0];
+    if(!confirm('恢复最近备份？\n\n'+f.name+'\n\n当前数据会被覆盖，系统会先自动生成一个恢复点。'))return;
+    createRestorePoint('before-restore').then(function(){
+      window.electronAPI.readBackupJson(f.path).then(function(res){
+        if(!res||!res.ok){toast('读取备份失败: '+((res&&res.error)||''));return;}
+        try{
+          _applyFullJsonImport(JSON.parse(res.content));
+          toast('✓ 已恢复最近备份');
+        }catch(e){toast('恢复失败: '+e.message);}
+      });
+    });
+  });
+}
+function exportJson(){
+  q('exp-menu').classList.remove('on');
+  var bundle=buildBackupBundle('export');
   dl(new Blob([JSON.stringify(bundle,null,2)],{type:'application/json'}),'tangzon_full.json');
   localStorage.setItem('tz3_last_export', String(Date.now()));
   var b=document.getElementById('backup-banner');if(b)b.remove();
@@ -4036,7 +4288,7 @@ function checkBackupReminder(){
   if(now<snooze)return;
   // First-run grace: if no data & no last export, skip
   if(!last && !Object.keys(DATA||{}).length)return;
-  var threshold=30*DAY;
+  var threshold=7*DAY;
   if(!last || (now-last)>threshold){
     var days=last?Math.floor((now-last)/DAY):null;
     showBackupBanner(days);
@@ -4219,6 +4471,7 @@ function toggleSelCard(asin,chk){
 function retireSelected(){
   if(!_selAsins.size){toast('请先勾选产品');return;}
   if(!confirm('将所选 '+_selAsins.size+' 个产品移入淘汰？'))return;
+  createRestorePoint('before-bulk-retire');
   snapshotForUndo();
   var asins=Array.from(_selAsins);
   asins.forEach(function(asin){
@@ -4662,6 +4915,22 @@ function _applyImgs(){
         if(!savedOrder){try{var lo=localStorage.getItem('tz3_rating_order');if(lo)savedOrder=lo;}catch(e){}}
         so.value=savedOrder||'oldest';
       }
+      if(window.electronAPI&&window.electronAPI.getBackupDir){
+        window.electronAPI.getBackupDir().then(function(dir){
+          var bd=document.getElementById('backup-dir-label');
+          if(bd)bd.textContent='自动备份每天保存一次；导入、清空、批量淘汰前会生成恢复点。位置：'+dir;
+        });
+      }
+      if(window.electronAPI&&window.electronAPI.getSpApiSettings){
+        window.electronAPI.getSpApiSettings().then(function(sp){
+          sp=sp||{};
+          var se=document.getElementById('set-spapi-enabled');
+          var sm=document.getElementById('set-spapi-marketplace');
+          if(se)se.checked=!!sp.enabled;
+          if(sm)sm.value=sp.marketplaceId||'A1F83G8C2ARO7P';
+        });
+      }
+      if(typeof showImageHealth==='function')showImageHealth(true);
     });
   }
   var origOpenMo=window.openMo;
@@ -4686,7 +4955,13 @@ function _applyImgs(){
       localStorage.setItem('tz3_rating_scope',updates.ratingScope||'all');
       localStorage.setItem('tz3_rating_order',updates.ratingOrder||'oldest');
     }catch(e){}
-    window.electronAPI.saveSettings(updates).then(function(){
+    var spUpdates={
+      enabled:document.getElementById('set-spapi-enabled')?document.getElementById('set-spapi-enabled').checked:false,
+      marketplaceId:document.getElementById('set-spapi-marketplace')?document.getElementById('set-spapi-marketplace').value.trim():'A1F83G8C2ARO7P'
+    };
+    var saveTasks=[window.electronAPI.saveSettings(updates)];
+    if(window.electronAPI.saveSpApiSettings)saveTasks.push(window.electronAPI.saveSpApiSettings(spUpdates));
+    Promise.all(saveTasks).then(function(){
       var scopeLabel=updates.ratingScope==='all'?'全部产品':
         (updates.ratingScope.indexOf('cat::')===0?updates.ratingScope.slice(5)+'（整个大类）':
          updates.ratingScope.indexOf('sub::')===0?updates.ratingScope.slice(5).replace('::',' › '):'未知');
@@ -5082,28 +5357,11 @@ function fetchAmazonRating(asin){
   if(!_isElectronEnv())return Promise.resolve(null);
   asin=asin.trim().toUpperCase();
   if(!/^[A-Z0-9]{10,12}$/.test(asin))return Promise.resolve(null);
-  var domains=['amazon.co.uk'];  // UK seller only — other regions are unrelated listings
-  var di=0;
-  function tryNext(){
-    if(di>=domains.length)return Promise.resolve(null);
-    var d=domains[di++];
-    var url='https://www.'+d+'/dp/'+asin;
-    return fetch(url,{
-      method:'GET',
-      headers:{
-        'Accept':'text/html,*/*',
-        'Accept-Language':'en-US,en;q=0.9',
-        'User-Agent':'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-      }
-    }).then(function(r){return r.ok?r.text():null;}).then(function(t){
-      if(!t)return tryNext();
-      var res=_extractRatingFromHtml(t);
-      if(res&&res.error==='robot_check')return tryNext();
-      if(res&&(res.star!==undefined||res.ratings!==undefined))return res;
-      return tryNext();
-    }).catch(function(){return tryNext();});
-  }
-  return tryNext();
+  return _fetchAmazonPageSafe(asin).then(function(page){
+    if(!page)return null;
+    if(page.error)return page;
+    return _parseAmazonDetails(page.html);
+  });
 }
 
 // Pick products that most need a rating refresh (never fetched, or oldest)
@@ -5170,7 +5428,7 @@ function startRatingTrickle(){
     _ratingJob.cancelled=false;
     var idx=0,ok=0;
 
-    var _attemptDetails=[];  // [{asin, oldStar, newStar, oldRatings, newRatings, ok, reason, sku, img, t}]
+    var _attemptDetails=[];  // [{asin, oldStar, newStar, oldRatings, newRatings, oldPrice, newPrice, ok, reason, sku, img, t}]
 
     function updateBar(currentAsin){
       var el=q('sb-rating-progress');
@@ -5234,11 +5492,17 @@ function startRatingTrickle(){
                 var newR=(d.newRatings==null)?'—':d.newRatings;
                 ratingsHtml='<span style="color:var(--tx3);font-size:10.5px;margin-left:8px">'+oldR+' → '+newR+' 评论</span>';
               }
+              var priceHtml='';
+              if(d.newPrice!=null){
+                var oldP=(d.oldPrice==null||d.oldPrice==='')?'—':'£'+Number(d.oldPrice).toFixed(2);
+                var newP='£'+Number(d.newPrice).toFixed(2);
+                priceHtml='<span style="color:var(--green);font-size:10.5px;margin-left:8px">'+oldP+' → '+newP+'</span>';
+              }
               successRows.push('<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-bottom:1px solid var(--bor-soft)">'
                 +imgHtml
                 +'<div style="flex:1;min-width:0">'
                   +'<div style="display:flex;align-items:center;gap:4px;margin-bottom:2px">'+asinHtml+skuHtml+'</div>'
-                  +'<div style="font-size:11px">'+starHtml+ratingsHtml+'</div>'
+                  +'<div style="font-size:11px">'+starHtml+ratingsHtml+priceHtml+'</div>'
                 +'</div>'
                 +'<span style="color:var(--green);font-size:11px;font-weight:600;flex-shrink:0">✓</span>'
               +'</div>');
@@ -5306,6 +5570,7 @@ function startRatingTrickle(){
         if(_itPre){
           _detail.oldStar=_itPre.star;
           _detail.oldRatings=_itPre.ratings;
+          _detail.oldPrice=_itPre.price;
           _detail.sku=_itPre.new_sku||_itPre.sku||'';
           _detail.img=_itPre.img||(typeof getImg==='function'?getImg(asin):null);
         }
@@ -5313,13 +5578,15 @@ function startRatingTrickle(){
       updateBar(asin);
       fetchAmazonRating(asin).then(function(res){
         var logEntry={asin:asin,time:Date.now(),ok:false,img:(typeof getImg==='function'?getImg(asin):'')};
-        if(res&&(res.star!==undefined||res.ratings!==undefined)){
+        if(res&&(res.star!==undefined||res.ratings!==undefined||res.price!==undefined||res.img)){
           var loc=findItem(asin);
           if(loc.cat){
             var it=DATA[loc.cat][loc.sub][loc.idx];
             if(it){
               if(res.star!==undefined)it.star=res.star;
               if(res.ratings!==undefined)it.ratings=res.ratings;
+              if(res.price!==undefined)it.price=res.price;
+              if(res.img&&!getImg(asin)){IMGS[asin]=res.img;logEntry.img=res.img;_detail.img=res.img;}
               it.ratingFetchedAt=Date.now();
               if(typeof REVIEW_HIST!=='undefined'){
                 if(!REVIEW_HIST[asin])REVIEW_HIST[asin]=[];
@@ -5330,11 +5597,13 @@ function startRatingTrickle(){
               logEntry.ok=true;
               logEntry.star=res.star;
               logEntry.ratings=res.ratings;
+              logEntry.price=res.price;
               logEntry.name=it.new_sku||it.sku||'';
               logEntry.img=it.img||logEntry.img||'';
               _detail.ok=true;
               _detail.newStar=res.star;
               _detail.newRatings=res.ratings;
+              _detail.newPrice=res.price;
             }
           }
         } else {
@@ -5394,6 +5663,7 @@ function showRatingLog(){
         detailHtml='<span style="color:var(--tx2);font-size:11px">'
           +(e.star!==undefined?'★ '+e.star:'')
           +(e.ratings!==undefined?'　'+e.ratings+' 评论':'')
+          +(e.price!==undefined?'　£'+Number(e.price).toFixed(2):'')
           +'</span>';
       } else {
         statusHtml='<span style="color:var(--red);font-size:11px;font-weight:600;flex-shrink:0">✗ 失败</span>';
@@ -5717,6 +5987,7 @@ function confirmImportTarget(target){
 
 function _importToInbox(text,type){
   var added=0,skipped=0;
+  createRestorePoint('before-inbox-import');
   function addRow(asin,fields){
     asin=(asin||'').replace(/[^A-Z0-9]/gi,'').toUpperCase();
     if(!asin||asin.length<10)return;
@@ -5988,10 +6259,41 @@ function exportPromoAmazonCsv(promoId){
 // 更新日志 (Changelog)
 // 每次发新版，在 CHANGELOG 数组最前面加一条即可。
 // ════════════════════════════════════════════════════════════════
-var APP_VERSION='3.5.6';
+var APP_VERSION='3.5.9';
 // 标题栏自动显示当前版本号（跟随 APP_VERSION，不用手动改）
 try{ document.title = 'Tangzon 产品管理 v' + APP_VERSION; }catch(e){}
 var CHANGELOG=[
+  {
+    v:'3.5.9', date:'2026-06-21',
+    notes:[
+      '新增：接入 Cheerio 可选解析器，星级、评论数、价格、图片抓取会优先走更稳定的 HTML 解析，依赖不可用时自动回退原解析方式',
+      '新增：设置页加入 Amazon SP-API 官方接口预留入口，只保存开关和 Marketplace ID，不保存密钥',
+      '新增：接入 Dexie 可选本地缓存基础层，为后续更大的操作日志、备份索引和性能优化做准备',
+      '新增：加入 Playwright 冒烟测试，可自动检查页面外壳、产品区和设置入口是否正常加载',
+      '优化：抓取能力继续保持安全模式，不使用代理池和规避风控方案，遇到异常自动回退'
+    ]
+  },
+  {
+    v:'3.5.8', date:'2026-06-20',
+    notes:[
+      '优化：Amazon 抓取改为安全模式，只直连 Amazon UK，桌面版不再使用第三方代理兜底',
+      '优化：抓取增加页面缓存、15 秒超时和反爬退避，遇到 Robot Check 会暂停一段时间',
+      '新增：自动抓取星级 / 评论数时会同步解析价格，抓到后自动更新产品价格',
+      '优化：同一次 Amazon 页面结果会复用给星级、评论数、价格和图片，减少请求次数',
+      '修复：产品卡拖动事件重复绑定导致长时间使用后移动卡片变卡的问题',
+      '优化：图片懒加载刷新前会断开旧观察队列，减少长时间打开后的旧元素占用'
+    ]
+  },
+  {
+    v:'3.5.7', date:'2026-06-20',
+    notes:[
+      '新增：自动备份每天保存一次到 Documents / Tangzon Backups',
+      '新增：导入、清空产品库、批量淘汰前自动生成恢复点',
+      '新增：设置里可立即备份、打开备份文件夹、恢复最近备份',
+      '新增：图片管理体检，显示缺图数量、图片缓存数量、估算占用和可清理项',
+      '新增：一键清理无用图片缓存，只清理不属于产品库、淘汰列表和待分配区的图片'
+    ]
+  },
   {
     v:'3.5.6', date:'2026-06-20',
     notes:[
