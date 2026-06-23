@@ -1,8 +1,8 @@
 {
   "enabled": false,
-  "version": "3.5.17-hot.0",
-  "minAppVersion": "3.5.17",
-  "maxAppVersion": "3.5.17",
+  "version": "3.5.18-hot.0",
+  "minAppVersion": "3.5.18",
+  "maxAppVersion": "3.5.18",
   "notes": [
     "当前没有可用在线小更新。需要发布页面级修复时，将 enabled 改为 true，并填写 htmlUrl 与 sha256。"
   ],
