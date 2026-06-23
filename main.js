@@ -305,18 +305,40 @@ function parseAmazonHtmlWithCheerio(html) {
   const $ = cheerio.load(html);
   const data = {};
   const cleanNum = (s) => {
-    const n = parseFloat(String(s || '').replace(/&nbsp;/g, ' ').replace(/,/g, '').replace(/[^0-9.]/g, ''));
+    const m = String(s || '').replace(/&nbsp;/g, ' ').replace(/,/g, '').match(/([0-9]+(?:\.[0-9]{1,2})?)/);
+    const n = m ? parseFloat(m[1]) : NaN;
     return Number.isFinite(n) && n > 0 ? Math.round(n * 100) / 100 : null;
   };
   const cleanText = (s) => String(s || '').replace(/\s+/g, ' ').trim();
+  const priceFromText = (s) => {
+    const txt = String(s || '');
+    const patterns = [
+      /£\s*([0-9][0-9,]*(?:\.[0-9]{1,2})?)/i,
+      /"displayString"\s*:\s*"£\s*([0-9][0-9,]*(?:\.[0-9]{1,2})?)/i,
+      /"displayPrice"\s*:\s*"[^0-9"]*([0-9][0-9,]*(?:\.[0-9]{1,2})?)/i,
+      /"priceAmount"\s*:\s*([0-9]+(?:\.[0-9]{1,2})?)/i,
+      /"amount"\s*:\s*([0-9]+(?:\.[0-9]{1,2})?)/i
+    ];
+    for (const re of patterns) {
+      const m = txt.match(re);
+      if (m) {
+        const v = cleanNum(m[1]);
+        if (v) return v;
+      }
+    }
+    return null;
+  };
   const promoTexts = [
     $('#dealBadge_feature_div').text(),
     $('#couponBadge_feature_div').text(),
+    $('#dealBadgeSupportingText').text(),
     $('#promoPriceBlockMessage_feature_div').text(),
     $('#vpcButton').text(),
     $('#couponText').text(),
     $('#reinvent_price_desktop_pickupMessage_feature_div').text(),
-    $('.dealBadge, .priceBlockBadge, .savingsPercentage, .couponBadge, .couponLabel').text()
+    $('[id*="dealBadge"]').text(),
+    $('[id*="coupon"]').text(),
+    $('.dealBadge, .dealBadgeTextColor, .priceBlockBadge, .savingsPercentage, .couponBadge, .couponLabel, [class*="coupon"]').text()
   ].map(cleanText).filter(Boolean);
   if (!promoTexts.length) {
     const rawMatch = html.match(/limited\s*time\s*deal|prime\s*exclusive\s*deal|voucher|coupon|lightning\s*deal|7[-\s]?day\s*deal|best\s*deal/i);
@@ -335,6 +357,7 @@ function parseAmazonHtmlWithCheerio(html) {
   if (/\b(voucher|coupon)\b/i.test(promoText)) promoTags.push(/voucher/i.test(promoText) ? 'Voucher' : 'Coupon');
   const saveMatch = promoText.match(/\b(save|saving)\s*(?:up to\s*)?([0-9]{1,3}%|£\s*[0-9,.]+)/i) || promoText.match(/([0-9]{1,3}%|£\s*[0-9,.]+)\s*(?:off|discount)/i);
   if (saveMatch) promoTags.push(cleanText(saveMatch[0]).slice(0, 36));
+  if (!promoTags.length && /priceblock_dealprice|dealprice|dealBadge_feature_div|dealBadge/i.test(html)) promoTags.push('Deal price');
   if (promoTags.length) data.promoBadge = [...new Set(promoTags)].slice(0, 3).join(' + ');
 
   const starText =
@@ -356,14 +379,27 @@ function parseAmazonHtmlWithCheerio(html) {
   }
   if (data.star !== undefined && (data.ratings === undefined || data.ratings === 0)) delete data.star;
   const priceCandidates = [
+    $('#corePriceDisplay_desktop_feature_div .priceToPay .a-offscreen').first().text(),
+    $('#corePriceDisplay_desktop_feature_div .a-price .a-offscreen').first().text(),
+    $('#corePriceDisplay_mobile_feature_div .a-price .a-offscreen').first().text(),
+    $('#corePrice_feature_div .priceToPay .a-offscreen').first().text(),
     $('#corePrice_feature_div .a-offscreen').first().text(),
     $('#apex_desktop .a-offscreen').first().text(),
+    $('#buyNewSection .a-offscreen').first().text(),
+    $('#qualifiedBuybox .a-offscreen').first().text(),
+    $('#newAccordionRow_0 .a-offscreen').first().text(),
+    $('[id^="aod-price"] .a-offscreen').first().text(),
+    $('.aod-offer-price .a-offscreen').first().text(),
+    $('#sns-base-price .a-offscreen').first().text(),
     $('#priceblock_ourprice').first().text(),
     $('#priceblock_dealprice').first().text(),
-    $('#priceblock_saleprice').first().text()
+    $('#priceblock_saleprice').first().text(),
+    html.slice(Math.max(0, html.toLowerCase().indexOf('pricetopay') - 800), Math.max(0, html.toLowerCase().indexOf('pricetopay') - 800) + 3600),
+    html.slice(Math.max(0, html.toLowerCase().indexOf('aod-offer-price') - 800), Math.max(0, html.toLowerCase().indexOf('aod-offer-price') - 800) + 3600),
+    html.slice(Math.max(0, html.toLowerCase().indexOf('twister-plus-buying-options-price-data') - 800), Math.max(0, html.toLowerCase().indexOf('twister-plus-buying-options-price-data') - 800) + 3600)
   ];
   for (const p of priceCandidates) {
-    const v = cleanNum(p);
+    const v = priceFromText(p) || cleanNum(p);
     if (v) { data.price = v; break; }
   }
   const img =

@@ -1695,6 +1695,7 @@ setInterval(function(){
   Object.keys(_AMZ_PAGE_CACHE).forEach(function(a){if(now-(_AMZ_PAGE_CACHE[a].t||0)>15*60*1000)delete _AMZ_PAGE_CACHE[a];});
 },10*60*1000);
 function _amazonUrl(asin){return 'https://www.amazon.co.uk/dp/'+asin+'?th=1&psc=1';}
+function _amazonOfferUrl(asin){return 'https://www.amazon.co.uk/gp/product/ajax/ref=dp_aod_ALL_mbc?asin='+asin+'&pc=dp';}
 function _fetchAmazonPageSafe(asin){
   asin=(asin||'').trim().toUpperCase();
   if(!/^[A-Z0-9]{10,12}$/.test(asin))return Promise.resolve(null);
@@ -1726,31 +1727,103 @@ function _fetchAmazonPageSafe(asin){
   _AMZ_PAGE_CACHE[asin]={t:now,promise:p};
   return p;
 }
+function _fetchAmazonOfferPageSafe(asin){
+  asin=(asin||'').trim().toUpperCase();
+  if(!/^[A-Z0-9]{10,12}$/.test(asin))return Promise.resolve(null);
+  var now=Date.now(),key=asin+'::offer';
+  if(_AMZ_ROBOT_UNTIL&&now<_AMZ_ROBOT_UNTIL)return Promise.resolve({error:'robot_check'});
+  var cached=_AMZ_PAGE_CACHE[key];
+  if(cached&&cached.t&&now-cached.t<10*60*1000)return cached.promise;
+  var controller=(typeof AbortController!=='undefined')?new AbortController():null;
+  var timer=controller?setTimeout(function(){try{controller.abort();}catch(e){}},15000):null;
+  var p=fetch(_amazonOfferUrl(asin),{
+    method:'GET',
+    credentials:'omit',
+    cache:'no-store',
+    signal:controller?controller.signal:undefined,
+    headers:{
+      'Accept':'text/html,application/xhtml+xml,*/*',
+      'Accept-Language':'en-GB,en;q=0.9',
+      'Referer':_amazonUrl(asin),
+      'User-Agent':'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+    }
+  }).then(function(r){return r&&r.ok?r.text():null;}).then(function(t){
+    if(timer)clearTimeout(timer);
+    if(!t)return null;
+    if(/Robot Check|To discuss automated access|api-services-support@amazon/i.test(t)){
+      _AMZ_ROBOT_UNTIL=Date.now()+30*60*1000;
+      return {error:'robot_check'};
+    }
+    return {html:t,url:_amazonOfferUrl(asin)};
+  }).catch(function(e){if(timer)clearTimeout(timer);return null;});
+  _AMZ_PAGE_CACHE[key]={t:now,promise:p};
+  return p;
+}
 function _parsePriceNumber(s){
   if(!s)return null;
-  var n=parseFloat(String(s).replace(/&nbsp;/g,' ').replace(/,/g,'').replace(/[^0-9.]/g,''));
+  var raw=String(s).replace(/&nbsp;/g,' ').replace(/,/g,'');
+  var m=raw.match(/([0-9]+(?:\.[0-9]{1,2})?)/);
+  var n=m?parseFloat(m[1]):NaN;
   return isNaN(n)||n<=0?null:Math.round(n*100)/100;
+}
+function _firstPriceInText(s){
+  if(!s)return null;
+  var pats=[
+    /£\s*([0-9][0-9,]*(?:\.[0-9]{1,2})?)/i,
+    /"displayString"\s*:\s*"£\s*([0-9][0-9,]*(?:\.[0-9]{1,2})?)/i,
+    /"displayPrice"\s*:\s*"[^0-9"]*([0-9][0-9,]*(?:\.[0-9]{1,2})?)/i,
+    /"priceAmount"\s*:\s*([0-9]+(?:\.[0-9]{1,2})?)/i,
+    /"amount"\s*:\s*([0-9]+(?:\.[0-9]{1,2})?)/i
+  ];
+  for(var i=0;i<pats.length;i++){
+    var m=String(s).match(pats[i]);
+    if(m){var v=_parsePriceNumber(m[1]);if(v)return v;}
+  }
+  return null;
 }
 function _extractPriceFromHtml(htmlText){
   if(!htmlText||htmlText.length<500)return null;
-  var jm=htmlText.match(/"priceAmount"\s*:\s*([0-9.]+)/i);
-  if(jm){var jv=_parsePriceNumber(jm[1]);if(jv)return jv;}
-  var dm=htmlText.match(/"displayPrice"\s*:\s*"[^0-9"]*([0-9,.]+)/i);
-  if(dm){var dv=_parsePriceNumber(dm[1]);if(dv)return dv;}
-  var anchors=[/id=["']corePrice_feature_div["']/i,/id=["']apex_desktop["']/i,/id=["']priceblock_ourprice["']/i,/id=["']priceblock_dealprice["']/i,/id=["']priceblock_saleprice["']/i];
+  var jsonWindows=['priceToPay','corePriceDisplay','desktop_buybox_group','twister-plus-buying-options-price-data','buyingOption','aod-offer-price'];
+  for(var jw=0;jw<jsonWindows.length;jw++){
+    var ji=htmlText.toLowerCase().indexOf(jsonWindows[jw].toLowerCase());
+    if(ji>=0){var jv=_firstPriceInText(htmlText.substr(Math.max(0,ji-600),3600));if(jv)return jv;}
+  }
+  var direct=_firstPriceInText(htmlText.match(/"priceAmount"\s*:\s*[0-9.]+|"displayPrice"\s*:\s*"[^"]+"|"displayString"\s*:\s*"£[^"]+"/i)||'');
+  if(direct)return direct;
+  var anchors=[
+    /id=["']corePriceDisplay_desktop_feature_div["']/i,
+    /id=["']corePriceDisplay_mobile_feature_div["']/i,
+    /id=["']corePrice_feature_div["']/i,
+    /id=["']apex_desktop["']/i,
+    /id=["']buyNewSection["']/i,
+    /id=["']qualifiedBuybox["']/i,
+    /id=["']newAccordionRow_0["']/i,
+    /id=["']aod-offer["']/i,
+    /id=["']aod-price/i,
+    /class=["'][^"']*aod-offer-price[^"']*["']/i,
+    /id=["']sns-base-price["']/i,
+    /id=["']priceblock_ourprice["']/i,
+    /id=["']priceblock_dealprice["']/i,
+    /id=["']priceblock_saleprice["']/i
+  ];
   for(var a=0;a<anchors.length;a++){
     var am=htmlText.match(anchors[a]);
     if(am&&am.index!==undefined){
-      var w=htmlText.substr(am.index,3500);
+      var w=htmlText.substr(am.index,5000);
       var off=w.match(/<span[^>]*class=["'][^"']*a-offscreen[^"']*["'][^>]*>\s*£\s*([0-9,.]+)/i);
       if(off){var ov=_parsePriceNumber(off[1]);if(ov)return ov;}
+      var label=w.match(/aria-label=["']£\s*([0-9,.]+)["']/i);
+      if(label){var lv=_parsePriceNumber(label[1]);if(lv)return lv;}
       var whole=w.match(/<span[^>]*class=["'][^"']*a-price-whole[^"']*["'][^>]*>\s*([0-9,]+)/i);
       var frac=w.match(/<span[^>]*class=["'][^"']*a-price-fraction[^"']*["'][^>]*>\s*([0-9]{2})/i);
       if(whole){var pv=_parsePriceNumber(whole[1]+'.'+(frac?frac[1]:'00'));if(pv)return pv;}
+      var any=_firstPriceInText(w);
+      if(any)return any;
     }
   }
   var pb=htmlText.match(/id=["']priceblock_(?:ourprice|dealprice|saleprice)["'][^>]*>\s*£\s*([0-9,.]+)/i);
-  return pb?_parsePriceNumber(pb[1]):null;
+  if(pb)return _parsePriceNumber(pb[1]);
+  return null;
 }
 function _stripHtmlText(s){
   return String(s||'')
@@ -1766,11 +1839,13 @@ function _extractPromoBadgeFromHtml(htmlText){
   if(!htmlText||htmlText.length<800)return null;
   var chunks=[],anchors=[
     /id=["']dealBadge_feature_div["']/i,
+    /id=["']dealBadgeSupportingText["']/i,
     /id=["']couponBadge_feature_div["']/i,
     /id=["']promoPriceBlockMessage_feature_div["']/i,
     /id=["']vpcButton["']/i,
     /id=["']couponText["']/i,
-    /class=["'][^"']*(?:dealBadge|couponBadge|couponLabel|savingsPercentage)[^"']*["']/i
+    /id=["'][^"']*(?:dealBadge|coupon)[^"']*["']/i,
+    /class=["'][^"']*(?:dealBadge|dealBadgeTextColor|couponBadge|couponLabel|savingsPercentage|coupon)[^"']*["']/i
   ];
   anchors.forEach(function(re){
     var m=htmlText.match(re);
@@ -1781,6 +1856,7 @@ function _extractPromoBadgeFromHtml(htmlText){
     if(raw&&raw.index!==undefined)chunks.push(htmlText.substr(Math.max(0,raw.index-500),2000));
   }
   var text=_stripHtmlText(chunks.join(' | '));
+  if(!text&&/priceblock_dealprice|dealprice|dealBadge_feature_div|dealBadge/i.test(htmlText))return 'Deal price';
   if(!text)return null;
   var tags=[];
   if(/limited\s*time\s*deal/i.test(text))tags.push('Limited time deal');
@@ -1790,6 +1866,7 @@ function _extractPromoBadgeFromHtml(htmlText){
   if(/\b(voucher|coupon)\b/i.test(text))tags.push(/voucher/i.test(text)?'Voucher':'Coupon');
   var save=text.match(/\b(save|saving)\s*(?:up to\s*)?([0-9]{1,3}%|£\s*[0-9,.]+)/i)||text.match(/([0-9]{1,3}%|£\s*[0-9,.]+)\s*(?:off|discount)/i);
   if(save)tags.push(save[0].slice(0,36));
+  if(!tags.length&&/priceblock_dealprice|dealprice|dealBadge_feature_div|dealBadge/i.test(htmlText))tags.push('Deal price');
   tags=tags.filter(function(v,i,a){return v&&a.indexOf(v)===i;});
   return tags.length?tags.slice(0,3).join(' + '):null;
 }
@@ -2447,7 +2524,7 @@ function fetchPromoBadges(promoId){
     }
     var asin=targets[i].asin;
     if(q('promo-meta'))q('promo-meta').textContent='正在抓取活动标/活动价 '+(i+1)+'/'+targets.length+' · '+asin;
-    fetchAmazonRating(asin).then(function(res){
+    fetchAmazonPromoDetails(asin).then(function(res){
       if(res&&res.error==='robot_check'){
         fail++;
         _promoBadgeJob.running=false;
@@ -5657,6 +5734,27 @@ function fetchAmazonRating(asin){
     return _parseAmazonDetails(page.html);
   });
 }
+function fetchAmazonPromoDetails(asin){
+  if(!_isElectronEnv())return Promise.resolve(null);
+  asin=asin.trim().toUpperCase();
+  if(!/^[A-Z0-9]{10,12}$/.test(asin))return Promise.resolve(null);
+  return _fetchAmazonPageSafe(asin).then(function(page){
+    if(!page)return null;
+    if(page.error)return page;
+    return _parseAmazonDetails(page.html).then(function(base){
+      base=base||{};
+      if(base.price!==undefined&&base.price!==null)return base;
+      return _fetchAmazonOfferPageSafe(asin).then(function(offer){
+        if(!offer)return base;
+        if(offer.error)return Object.keys(base).length?base:offer;
+        var extra=_extractAmazonDetailsFromHtml(offer.html)||{};
+        var offerPrice=_extractPriceFromHtml(offer.html);
+        if(offerPrice!==null)extra.price=offerPrice;
+        return Object.assign({},base,extra);
+      }).catch(function(){return base;});
+    });
+  });
+}
 
 // Pick products that most need a rating refresh.
 function _pickRatingTargets(limit, scope, order, mode){
@@ -6986,10 +7084,19 @@ function exportPromoAmazonCsv(promoId){
 // 更新日志 (Changelog)
 // 每次发新版，在 CHANGELOG 数组最前面加一条即可。
 // ════════════════════════════════════════════════════════════════
-var APP_VERSION='3.5.18';
+var APP_VERSION='3.5.19';
 // 标题栏自动显示当前版本号（跟随 APP_VERSION，不用手动改）
 try{ document.title = 'Tangzon 产品管理 v' + APP_VERSION; }catch(e){}
 var CHANGELOG=[
+  {
+    v:'3.5.19', date:'2026-06-24',
+    notes:[
+      '优化：抓取活动标/活动价时，商品页未解析到价格会自动尝试 Amazon offer 面板兜底',
+      '优化：活动价解析增加 priceToPay、桌面/移动价格块、buybox、AOD offer 等更多价格来源',
+      '优化：活动标增加 dealBadge、coupon、deal price 等兜底识别',
+      '说明：活动价抓取不再依赖平时价；平时价为空时也会更新活动价'
+    ]
+  },
   {
     v:'3.5.18', date:'2026-06-24',
     notes:[
