@@ -365,6 +365,9 @@ a{color:inherit;text-decoration:none;}
 .promo-tbl tr:hover td{background:var(--sur2);}
 .promo-tbl .mono{font-family:"JetBrains Mono",monospace;font-weight:500;}
 .promo-tbl .drop{color:var(--green);font-weight:600;}
+.promo-amz-badge{display:inline-flex;align-items:center;max-width:140px;padding:2px 7px;border-radius:99px;background:#fff7ed;color:#c2410c;border:1px solid #fed7aa;font-size:9.5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;vertical-align:middle;}
+.promo-amz-badge.none{background:var(--sur2);color:var(--tx4);border-color:var(--bor);font-weight:600;}
+.promo-amz-badge.stale{opacity:.72;}
 .promo-price-edit{cursor:pointer;border-radius:4px;padding:1px 4px;transition:all .12s var(--easing);text-decoration:underline dotted var(--tx4);text-underline-offset:2px;}
 .promo-price-edit:hover{background:var(--accent-bg);text-decoration:none;color:var(--accent);}
 .promo-add-prod-btn{margin-top:10px;padding:6px 14px;border:1px dashed var(--accent-bor);background:var(--accent-bg);color:var(--accent);border-radius:6px;font-size:11.5px;font-weight:500;cursor:pointer;font-family:inherit;transition:all .14s var(--easing);}
@@ -629,6 +632,7 @@ body.dark .cpal{background:rgba(0,0,0,.7);}
           <button data-pf="ended" onclick="setPromoFilter('ended')">已结束</button>
         </div>
         <div class="c-search" style="width:240px"><span class="c-si">🔍</span><input id="promo-search-input" type="text" placeholder="筛选活动产品 ASIN / SKU…" oninput="setPromoSearch(this.value)"></div>
+        <button class="btn-c" onclick="fetchPromoBadges()" style="font-size:11.5px;padding:6px 12px">抓取活动标/活动价</button>
         <div style="flex:1"></div>
       </div>
       <div class="promo-list" id="promo-list"></div>
@@ -1742,6 +1746,47 @@ function _extractPriceFromHtml(htmlText){
   var pb=htmlText.match(/id=["']priceblock_(?:ourprice|dealprice|saleprice)["'][^>]*>\s*£\s*([0-9,.]+)/i);
   return pb?_parsePriceNumber(pb[1]):null;
 }
+function _stripHtmlText(s){
+  return String(s||'')
+    .replace(/<script[\s\S]*?<\/script>/gi,' ')
+    .replace(/<style[\s\S]*?<\/style>/gi,' ')
+    .replace(/<[^>]+>/g,' ')
+    .replace(/&nbsp;/g,' ')
+    .replace(/&amp;/g,'&')
+    .replace(/\s+/g,' ')
+    .trim();
+}
+function _extractPromoBadgeFromHtml(htmlText){
+  if(!htmlText||htmlText.length<800)return null;
+  var chunks=[],anchors=[
+    /id=["']dealBadge_feature_div["']/i,
+    /id=["']couponBadge_feature_div["']/i,
+    /id=["']promoPriceBlockMessage_feature_div["']/i,
+    /id=["']vpcButton["']/i,
+    /id=["']couponText["']/i,
+    /class=["'][^"']*(?:dealBadge|couponBadge|couponLabel|savingsPercentage)[^"']*["']/i
+  ];
+  anchors.forEach(function(re){
+    var m=htmlText.match(re);
+    if(m&&m.index!==undefined)chunks.push(htmlText.substr(m.index,2600));
+  });
+  if(!chunks.length){
+    var raw=htmlText.match(/limited\s*time\s*deal|prime\s*exclusive\s*deal|voucher|coupon|lightning\s*deal|7[-\s]?day\s*deal|best\s*deal/i);
+    if(raw&&raw.index!==undefined)chunks.push(htmlText.substr(Math.max(0,raw.index-500),2000));
+  }
+  var text=_stripHtmlText(chunks.join(' | '));
+  if(!text)return null;
+  var tags=[];
+  if(/limited\s*time\s*deal/i.test(text))tags.push('Limited time deal');
+  if(/prime\s*exclusive\s*deal/i.test(text))tags.push('Prime Exclusive Deal');
+  var deal=text.match(/\b(lightning|7[-\s]?day|best)\s*deal\b/i);
+  if(deal)tags.push(deal[0].replace(/\b\w/g,function(c){return c.toUpperCase();}));
+  if(/\b(voucher|coupon)\b/i.test(text))tags.push(/voucher/i.test(text)?'Voucher':'Coupon');
+  var save=text.match(/\b(save|saving)\s*(?:up to\s*)?([0-9]{1,3}%|£\s*[0-9,.]+)/i)||text.match(/([0-9]{1,3}%|£\s*[0-9,.]+)\s*(?:off|discount)/i);
+  if(save)tags.push(save[0].slice(0,36));
+  tags=tags.filter(function(v,i,a){return v&&a.indexOf(v)===i;});
+  return tags.length?tags.slice(0,3).join(' + '):null;
+}
 function _extractAmazonDetailsFromHtml(htmlText){
   if(!htmlText||htmlText.length<2000)return null;
   if(/Robot Check|api-services-support@amazon/i.test(htmlText))return {error:'robot_check'};
@@ -1756,13 +1801,15 @@ function _extractAmazonDetailsFromHtml(htmlText){
   if(img&&img.url)out.img=img.url;
   var price=_extractPriceFromHtml(htmlText);
   if(price!==null)out.price=price;
+  var promoBadge=_extractPromoBadgeFromHtml(htmlText);
+  if(promoBadge)out.promoBadge=promoBadge;
   return Object.keys(out).length?out:null;
 }
 function _parseAmazonDetails(htmlText){
   var fallback=_extractAmazonDetailsFromHtml(htmlText);
   if(window.electronAPI&&window.electronAPI.parseAmazonHtml){
     return window.electronAPI.parseAmazonHtml(htmlText).then(function(res){
-      if(res&&res.ok&&res.data&&Object.keys(res.data).length)return res.data;
+      if(res&&res.ok&&res.data&&Object.keys(res.data).length)return Object.assign({},fallback||{},res.data);
       return fallback;
     }).catch(function(){return fallback;});
   }
@@ -2312,6 +2359,117 @@ function _promoProductMatches(x,qv){
   }
   return false;
 }
+function _promoAmazonBadgeHtml(x){
+  var badge=(x.amazonBadge||x.promoBadge||'').trim();
+  if(badge){
+    var stale=(x.amazonBadgeFound===false);
+    return '<span class="promo-amz-badge '+(stale?'stale':'')+'" title="'+esc(stale?'上次抓到：'+badge:badge)+'">'+esc(badge)+'</span>';
+  }
+  if(x.amazonBadgeFetchedAt){
+    return '<span class="promo-amz-badge none" title="已检查，但页面未识别到活动标">未识别</span>';
+  }
+  return '<span class="promo-amz-badge none" title="还未抓取活动标">未抓取</span>';
+}
+function _setPromoBadgeForAsin(asin,badge,found){
+  return _applyPromoAmazonDetailsForAsin(asin,{promoBadge:badge,promoBadgeFound:found,checked:true});
+}
+function _applyPromoAmazonDetailsForAsin(asin,details){
+  asin=(asin||'').toUpperCase();
+  details=details||{};
+  var touched=0,priceTouched=0,now=Date.now();
+  var badge=(details.promoBadge||'').trim();
+  var hasPrice=details.price!==undefined&&details.price!==null&&!isNaN(parseFloat(details.price))&&parseFloat(details.price)>0;
+  var price=hasPrice?Math.round(parseFloat(details.price)*100)/100:null;
+  var libPrice=0;
+  var loc=findItem(asin);
+  if(loc.cat){
+    var lib=DATA[loc.cat][loc.sub][loc.idx]||{};
+    libPrice=parseFloat(lib.price)||0;
+  }
+  Object.keys(PROMOTIONS||{}).forEach(function(pid){
+    var p=PROMOTIONS[pid];
+    (p.products||[]).forEach(function(x){
+      if((x.asin||'').toUpperCase()!==asin)return;
+      if(badge){
+        x.amazonBadge=badge;
+        x.amazonBadgeFound=true;
+      }else if(details.checked){
+        x.amazonBadgeFound=!!details.promoBadgeFound;
+      }
+      if(details.checked||badge)x.amazonBadgeFetchedAt=now;
+      if(hasPrice){
+        if(!x.originalPrice||x.originalPrice<=0)x.originalPrice=libPrice||x.originalPrice||price;
+        x.promoPrice=price;
+        x.amazonPromoPrice=price;
+        x.amazonPromoPriceFetchedAt=now;
+        priceTouched++;
+      }
+      touched++;
+    });
+  });
+  return {touched:touched,priceTouched:priceTouched};
+}
+function _promoBadgeTargets(promoId){
+  var rows=[];
+  var promos=promoId&&PROMOTIONS[promoId]?[PROMOTIONS[promoId]]:Object.values(PROMOTIONS||{});
+  var seen={};
+  promos.forEach(function(p){
+    (p.products||[]).forEach(function(x){
+      var a=(x.asin||'').toUpperCase();
+      if(!a||seen[a])return;
+      seen[a]=1;
+      rows.push({asin:a,promoId:p.id});
+    });
+  });
+  return rows;
+}
+var _promoBadgeJob={running:false};
+function fetchPromoBadges(promoId){
+  if(_promoBadgeJob.running){toast('活动标抓取正在进行中');return;}
+  if(!_isElectronEnv()){toast('桌面版才支持抓取活动标');return;}
+  var targets=_promoBadgeTargets(promoId);
+  if(!targets.length){toast('没有活动产品需要抓取');return;}
+  if(!confirm('将抓取 '+targets.length+' 个活动产品的 Amazon 活动标和当前活动价。会慢速执行，避免请求过快。开始吗？'))return;
+  _promoBadgeJob.running=true;
+  var i=0,ok=0,badgeOk=0,priceOk=0,miss=0,fail=0;
+  function next(){
+    if(i>=targets.length){
+      _promoBadgeJob.running=false;
+      markDirty();save();renderPromoView();
+      toast('活动抓取完成：活动标 '+badgeOk+'，活动价 '+priceOk+'，未识别 '+miss+'，失败 '+fail);
+      return;
+    }
+    var asin=targets[i].asin;
+    if(q('promo-meta'))q('promo-meta').textContent='正在抓取活动标/活动价 '+(i+1)+'/'+targets.length+' · '+asin;
+    fetchAmazonRating(asin).then(function(res){
+      if(res&&res.error==='robot_check'){
+        fail++;
+        _promoBadgeJob.running=false;
+        toast('遇到 Amazon 保护，活动标抓取已暂停');
+        renderPromoView();
+        return;
+      }
+      if(res&&(res.promoBadge||res.price!==undefined)){
+        var applied=_applyPromoAmazonDetailsForAsin(asin,{promoBadge:res.promoBadge||'',promoBadgeFound:!!res.promoBadge,price:res.price,checked:true});
+        if(res.promoBadge)badgeOk++;
+        if(applied&&applied.priceTouched)priceOk+=applied.priceTouched;
+        ok++;
+      }else if(res){
+        _applyPromoAmazonDetailsForAsin(asin,{checked:true,promoBadgeFound:false});
+        miss++;
+      }else{
+        fail++;
+      }
+      i++;
+      setTimeout(next,7000);
+    }).catch(function(){
+      fail++;
+      i++;
+      setTimeout(next,7000);
+    });
+  }
+  next();
+}
 
 function renderPromoView(){
   var listEl=q('promo-list'),statsEl=q('promo-stats'),metaEl=q('promo-meta');
@@ -2376,18 +2534,24 @@ function renderPromoView(){
         imgHtml='<div class="promo-card-img" data-asin="'+esc(x.asin)+'"><span style="font-size:14px;color:var(--tx4)">📦</span></div>';
       }
       var pid=esc(p.id),paasin=esc(x.asin);
+      var promoPriceTitle='点击编辑活动价';
+      if(x.amazonPromoPriceFetchedAt){
+        var _pd=new Date(x.amazonPromoPriceFetchedAt);
+        promoPriceTitle+='；Amazon 抓取 '+(_pd.getMonth()+1)+'/'+_pd.getDate()+' '+String(_pd.getHours()).padStart(2,'0')+':'+String(_pd.getMinutes()).padStart(2,'0');
+      }
       return '<tr>'
         +'<td>'+imgHtml+'</td>'
         +'<td class="mono"><a href="https://www.amazon.co.uk/dp/'+esc(x.asin)+'" target="_blank" style="color:var(--accent)">'+esc(x.asin)+'</a></td>'
         +'<td class="mono">'+esc(skuStr)+'</td>'
+        +'<td>'+_promoAmazonBadgeHtml(x)+'</td>'
         +'<td class="mono"><span class="promo-price-edit" title="点击编辑平时价" onclick="editPromoPrice(this,\''+pid+'\',\''+paasin+'\',\'orig\')">£'+(x.originalPrice||0).toFixed(2)+'</span></td>'
-        +'<td class="mono" style="color:var(--green);font-weight:600"><span class="promo-price-edit" title="点击编辑活动价" onclick="editPromoPrice(this,\''+pid+'\',\''+paasin+'\',\'promo\')">£'+(x.promoPrice||0).toFixed(2)+'</span></td>'
+        +'<td class="mono" style="color:var(--green);font-weight:600"><span class="promo-price-edit" title="'+esc(promoPriceTitle)+'" onclick="editPromoPrice(this,\''+pid+'\',\''+paasin+'\',\'promo\')">£'+(x.promoPrice||0).toFixed(2)+'</span></td>'
         +'<td class="drop">'+(drop>0?'-'+drop+'%':'—')+'</td>'
         +'<td class="mono" style="color:var(--tx3)">'+esc(x.addedAt||'')+'</td>'
         +'<td><button onclick="removeProductFromPromo(\''+pid+'\',\''+paasin+'\')" style="font-size:9px;padding:2px 7px;border:1px solid var(--red-bor);background:#fff;color:var(--red);border-radius:4px;cursor:pointer;font-family:inherit">✕</button></td>'
         +'</tr>';
     }).join('');
-    if(!rows)rows='<tr><td colspan="8" style="text-align:center;padding:18px;color:var(--tx3);font-size:11px">还没有产品，点击下方按钮添加</td></tr>';
+    if(!rows)rows='<tr><td colspan="9" style="text-align:center;padding:18px;color:var(--tx3);font-size:11px">还没有产品，点击下方按钮添加</td></tr>';
     return '<div class="promo-card s-'+st+' '+(st==='active'?'open':'')+'" id="promo-card-'+esc(p.id)+'">'
       +'<div class="promo-card-hd" onclick="togglePromoCard(\''+esc(p.id)+'\')">'
         +'<span class="chev">▶</span>'
@@ -2406,10 +2570,11 @@ function renderPromoView(){
         +'</div>'
       +'</div>'
       +'<div class="promo-card-body">'
-        +'<table class="promo-tbl"><thead><tr><th></th><th>ASIN</th><th>SKU</th><th>平时价</th><th>活动价</th><th>降幅</th><th>提报日</th><th></th></tr></thead><tbody>'+rows+'</tbody></table>'
+        +'<table class="promo-tbl"><thead><tr><th></th><th>ASIN</th><th>SKU</th><th>Amazon活动标</th><th>平时价</th><th>活动价</th><th>降幅</th><th>提报日</th><th></th></tr></thead><tbody>'+rows+'</tbody></table>'
         +'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">'
         +'<button class="promo-add-prod-btn" onclick="openAddProductToPromo(\''+esc(p.id)+'\')">＋ 加入产品</button>'
         +'<button class="promo-add-prod-btn" onclick="openBatchAddToPromo(\''+esc(p.id)+'\')" style="background:var(--sur);color:var(--accent);border-color:var(--accent-bor)">批量添加</button>'
+        +((p.products||[]).length?'<button class="promo-add-prod-btn" onclick="fetchPromoBadges(\''+esc(p.id)+'\')" style="background:var(--sur);color:#c2410c;border-color:#fed7aa">抓本活动标/价</button>':'')
         +((p.products||[]).length?'<button class="promo-add-prod-btn" onclick="exportPromoAmazonFormat(\''+esc(p.id)+'\')" style="background:var(--sur);color:var(--green);border-color:#b4e0ca">导出活动提报表</button>':'')
         +'</div>'
       +'</div>'
@@ -5684,11 +5849,12 @@ function startRatingTrickle(){
                 var newP='£'+Number(d.newPrice).toFixed(2);
                 priceHtml='<span style="color:var(--green);font-size:10.5px;margin-left:8px">'+oldP+' → '+newP+'</span>';
               }
+              var promoHtml=d.promoBadge?'<span class="promo-amz-badge" style="font-size:9px;padding:1px 6px;margin-left:8px">'+esc(d.promoBadge)+'</span>':'';
               successRows.push('<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-bottom:1px solid var(--bor-soft)">'
                 +imgHtml
                 +'<div style="flex:1;min-width:0">'
                   +'<div style="display:flex;align-items:center;gap:4px;margin-bottom:2px">'+asinHtml+skuHtml+'</div>'
-                  +'<div style="font-size:11px">'+starHtml+ratingsHtml+priceHtml+'</div>'
+                  +'<div style="font-size:11px">'+starHtml+ratingsHtml+priceHtml+promoHtml+'</div>'
                 +'</div>'
                 +'<span style="color:var(--green);font-size:11px;font-weight:600;flex-shrink:0">✓</span>'
               +'</div>');
@@ -5772,8 +5938,9 @@ function startRatingTrickle(){
       updateBar(asin);
       fetchAmazonRating(asin).then(function(res){
         var logEntry={asin:asin,time:Date.now(),ok:false,img:(typeof getImg==='function'?getImg(asin):'')};
-        if(res&&(res.star!==undefined||res.ratings!==undefined||res.price!==undefined||res.img)){
+        if(res&&(res.star!==undefined||res.ratings!==undefined||res.price!==undefined||res.img||res.promoBadge)){
           var loc=findItem(asin);
+          var promoApplied=(res.promoBadge||res.price!==undefined)?_applyPromoAmazonDetailsForAsin(asin,{promoBadge:res.promoBadge||'',promoBadgeFound:!!res.promoBadge,price:res.price,checked:!!res.promoBadge}):null;
           if(loc.cat){
             var it=DATA[loc.cat][loc.sub][loc.idx];
             if(it){
@@ -5792,13 +5959,24 @@ function startRatingTrickle(){
               logEntry.star=res.star;
               logEntry.ratings=res.ratings;
               logEntry.price=res.price;
+              logEntry.promoBadge=res.promoBadge;
               logEntry.name=it.new_sku||it.sku||'';
               logEntry.img=it.img||logEntry.img||'';
               _detail.ok=true;
               _detail.newStar=res.star;
               _detail.newRatings=res.ratings;
               _detail.newPrice=res.price;
+              _detail.promoBadge=res.promoBadge;
             }
+          }
+          if(!logEntry.ok&&promoApplied&&promoApplied.touched){
+            ok++;
+            logEntry.ok=true;
+            logEntry.promoBadge=res.promoBadge;
+            logEntry.price=res.price;
+            _detail.ok=true;
+            _detail.promoBadge=res.promoBadge;
+            _detail.newPrice=res.price;
           }
         } else {
           _setRatingFetchedAt(asin);
@@ -5859,6 +6037,7 @@ function showRatingLog(){
           +(e.star!==undefined?'★ '+e.star:'')
           +(e.ratings!==undefined?'　'+e.ratings+' 评论':'')
           +(e.price!==undefined?'　£'+Number(e.price).toFixed(2):'')
+          +(e.promoBadge?'　<span class="promo-amz-badge" style="font-size:9px;padding:1px 6px">'+esc(e.promoBadge)+'</span>':'')
           +'</span>';
       } else {
         statusHtml='<span style="color:var(--red);font-size:11px;font-weight:600;flex-shrink:0">✗ 失败</span>';
@@ -6801,10 +6980,28 @@ function exportPromoAmazonCsv(promoId){
 // 更新日志 (Changelog)
 // 每次发新版，在 CHANGELOG 数组最前面加一条即可。
 // ════════════════════════════════════════════════════════════════
-var APP_VERSION='3.5.15';
+var APP_VERSION='3.5.17';
 // 标题栏自动显示当前版本号（跟随 APP_VERSION，不用手动改）
 try{ document.title = 'Tangzon 产品管理 v' + APP_VERSION; }catch(e){}
 var CHANGELOG=[
+  {
+    v:'3.5.17', date:'2026-06-24',
+    notes:[
+      '新增：抓取活动标时默认同步抓取 Amazon 当前价格，并写入活动产品的“活动价”',
+      '优化：如果活动产品平时价为空，会优先用产品库价格补平时价，方便自动计算降幅',
+      '优化：活动价会记录 Amazon 抓取时间，鼠标悬停活动价可查看来源时间',
+      '更新：活动池按钮文案改为“抓取活动标/活动价”和“抓本活动标/价”'
+    ]
+  },
+  {
+    v:'3.5.16', date:'2026-06-23',
+    notes:[
+      '新增：活动池支持抓取 Amazon 活动标，可识别 Limited time deal、Coupon、Voucher、Prime Exclusive Deal 等常见标识',
+      '新增：活动池表格增加“Amazon活动标”列，展示未抓取、未识别或已抓到的活动标',
+      '新增：活动池顶部可批量抓取所有活动产品活动标，每个活动卡也可单独抓本活动标',
+      '优化：活动标会随现有星级/价格/图片抓取流程一起解析，抓不到时不会直接清空已有标记'
+    ]
+  },
   {
     v:'3.5.15', date:'2026-06-21',
     notes:[
