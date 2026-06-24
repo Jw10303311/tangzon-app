@@ -424,7 +424,8 @@ function getSettings() {
     ratingOrder: cfg.ratingOrder || 'oldest',
     ratingMode: cfg.ratingMode || 'smart',
     ratingQuota: cfg.ratingQuota || 100,
-    ratingFailPauseHours: cfg.ratingFailPauseHours || 3,
+    ratingFailPauseMinutes: cfg.ratingFailPauseMinutes || (cfg.ratingFailPauseHours ? cfg.ratingFailPauseHours * 60 : 30),
+    ratingFailPauseHours: cfg.ratingFailPauseHours || 1,
     closeToTrayShown: cfg.closeToTrayShown || false
   };
 }

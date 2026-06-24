@@ -869,9 +869,10 @@ body.dark .cpal{background:rgba(0,0,0,.7);}
       <div style="flex:1;min-width:120px">
         <label class="fl" style="font-size:10.5px">失败保护</label>
         <select class="fsel" id="set-rating-fail-pause" style="font-size:11.5px;padding:5px 7px">
-          <option value="1">暂停 1 小时</option>
-          <option value="3">暂停 3 小时</option>
-          <option value="6">暂停 6 小时</option>
+          <option value="10">暂停 10 分钟</option>
+          <option value="30">暂停 30 分钟</option>
+          <option value="60">暂停 1 小时</option>
+          <option value="180">暂停 3 小时</option>
         </select>
       </div>
     </div>
@@ -5234,9 +5235,11 @@ function _applyImgs(){
         rq.value=Math.max(10,Math.min(500,savedQuota||100));
       }
       if(rfp){
-        var savedPause=parseInt(s.ratingFailPauseHours,10);
+        var savedPause=parseInt(s.ratingFailPauseMinutes,10);
+        if(!savedPause&&s.ratingFailPauseHours)savedPause=parseInt(s.ratingFailPauseHours,10)*60;
         if(!savedPause){try{var lp=parseInt(localStorage.getItem('tz3_rating_fail_pause')||'',10);if(lp)savedPause=lp;}catch(e){}}
-        rfp.value=String(savedPause||3);
+        if([10,30,60,180].indexOf(savedPause)<0)savedPause=30;
+        rfp.value=String(savedPause);
       }
       if(window.electronAPI&&window.electronAPI.getBackupDir){
         window.electronAPI.getBackupDir().then(function(dir){
@@ -5273,7 +5276,7 @@ function _applyImgs(){
       ratingOrder:document.getElementById('set-rating-order')?document.getElementById('set-rating-order').value:'oldest',
       ratingMode:document.getElementById('set-rating-mode')?document.getElementById('set-rating-mode').value:'smart',
       ratingQuota:document.getElementById('set-rating-quota')?Math.max(10,Math.min(500,parseInt(document.getElementById('set-rating-quota').value,10)||100)):100,
-      ratingFailPauseHours:document.getElementById('set-rating-fail-pause')?Math.max(1,Math.min(12,parseInt(document.getElementById('set-rating-fail-pause').value,10)||3)):3
+      ratingFailPauseMinutes:document.getElementById('set-rating-fail-pause')?Math.max(10,Math.min(180,parseInt(document.getElementById('set-rating-fail-pause').value,10)||30)):30
     };
     var wasAutoRating=updates.autoRating;
     // FIX: also persist scope/order to localStorage as fallback
@@ -5282,7 +5285,7 @@ function _applyImgs(){
       localStorage.setItem('tz3_rating_order',updates.ratingOrder||'oldest');
       localStorage.setItem('tz3_rating_mode',updates.ratingMode||'smart');
       localStorage.setItem('tz3_rating_quota',String(updates.ratingQuota||100));
-      localStorage.setItem('tz3_rating_fail_pause',String(updates.ratingFailPauseHours||3));
+      localStorage.setItem('tz3_rating_fail_pause',String(updates.ratingFailPauseMinutes||30));
     }catch(e){}
     var spUpdates={
       enabled:document.getElementById('set-spapi-enabled')?document.getElementById('set-spapi-enabled').checked:false,
@@ -5879,9 +5882,9 @@ function startRatingTrickle(){
 
     _ratingJob.running=true;
     _ratingJob.cancelled=false;
-    _ratingJob.robotHit=false;
+    _ratingJob.robotHits=0;
     var idx=0,ok=0;
-    var failPauseHours=Math.max(1,Math.min(12,parseInt(s.ratingFailPauseHours,10)||3));
+    var failPauseMinutes=Math.max(10,Math.min(180,parseInt(s.ratingFailPauseMinutes,10)||(parseInt(s.ratingFailPauseHours,10)||0)*60||30));
 
     var _attemptDetails=[];  // [{asin, oldStar, newStar, oldRatings, newRatings, oldPrice, newPrice, ok, reason, sku, img, t}]
 
@@ -6015,8 +6018,9 @@ function startRatingTrickle(){
         _saveRatingState(st);
         if(idx>0){
           var failRate=(idx-ok)/idx;
-          if(_ratingJob.robotHit||(idx>=3&&failRate>=0.6)){
-            _saveRatingFailState({pausedUntil:Date.now()+failPauseHours*3600000,reason:_ratingJob.robotHit?'robot_check':'high_fail_rate'});
+          var shouldPause=(_ratingJob.robotHits>=3)||(idx>=5&&failRate>=0.8&&ok===0);
+          if(shouldPause){
+            _saveRatingFailState({pausedUntil:Date.now()+failPauseMinutes*60000,reason:_ratingJob.robotHits>=3?'robot_check_batch':'high_fail_rate',fails:idx-ok,ok:ok});
           } else if(ok>0){
             _saveRatingFailState({});
           }
@@ -6085,7 +6089,7 @@ function startRatingTrickle(){
         } else {
           _setRatingFetchedAt(asin);
           logEntry.reason=(res&&res.error==='robot_check')?'被反爬拦截':'页面没解析到数据';
-          if(res&&res.error==='robot_check'){_ratingJob.robotHit=true;_ratingJob.cancelled=true;}
+          if(res&&res.error==='robot_check'){_ratingJob.robotHits=(_ratingJob.robotHits||0)+1;}
           _detail.reason=logEntry.reason;
         }
         _attemptDetails.push(_detail);
@@ -6094,6 +6098,12 @@ function startRatingTrickle(){
         // 25 second gap between requests to avoid anti-bot
         setTimeout(next,25000);
       }).catch(function(){
+        var failAsin=targets[idx];
+        var failDetail={asin:failAsin,ok:false,t:Date.now(),reason:'请求失败'};
+        var failLog={asin:failAsin,time:Date.now(),ok:false,reason:'请求失败',img:(typeof getImg==='function'?getImg(failAsin):'')};
+        _setRatingFetchedAt(failAsin);
+        _attemptDetails.push(failDetail);
+        _pushRatingLog(failLog);
         idx++;
         setTimeout(next,25000);
       });
@@ -7084,10 +7094,19 @@ function exportPromoAmazonCsv(promoId){
 // 更新日志 (Changelog)
 // 每次发新版，在 CHANGELOG 数组最前面加一条即可。
 // ════════════════════════════════════════════════════════════════
-var APP_VERSION='3.5.19';
+var APP_VERSION='3.5.20';
 // 标题栏自动显示当前版本号（跟随 APP_VERSION，不用手动改）
 try{ document.title = 'Tangzon 产品管理 v' + APP_VERSION; }catch(e){}
 var CHANGELOG=[
+  {
+    v:'3.5.20', date:'2026-06-24',
+    notes:[
+      '修复：星级/价格/图片自动抓取中，单个 ASIN 失败或被拦截不会再直接停止整轮任务',
+      '优化：失败的 ASIN 会记录日志并跳过，后续 ASIN 会继续抓取',
+      '优化：失败保护从小时级改为分钟级，可选暂停 10 分钟、30 分钟、1 小时、3 小时',
+      '优化：只有多次 Robot Check 或整轮大面积失败时，才会在本轮结束后进入短暂停保护'
+    ]
+  },
   {
     v:'3.5.19', date:'2026-06-24',
     notes:[
