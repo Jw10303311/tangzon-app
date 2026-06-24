@@ -7168,10 +7168,18 @@ function exportPromoAmazonCsv(promoId){
 // 更新日志 (Changelog)
 // 每次发新版，在 CHANGELOG 数组最前面加一条即可。
 // ════════════════════════════════════════════════════════════════
-var APP_VERSION='3.5.22';
+var APP_VERSION='3.5.23';
 // 标题栏自动显示当前版本号（跟随 APP_VERSION，不用手动改）
 try{ document.title = 'Tangzon 产品管理 v' + APP_VERSION; }catch(e){}
 var CHANGELOG=[
+  {
+    v:'3.5.23', date:'2026-06-24',
+    notes:[
+      '优化：针对 Prime Day Deal 展示结构增强活动标识别',
+      '优化：抓取活动价时优先读取 Deal 标附近的当前英镑价格，降低误取 Was 原价的概率',
+      '验证：Prime Day Deal 可识别为活动标，示例中的 £27.96 会作为活动价优先解析'
+    ]
+  },
   {
     v:'3.5.22', date:'2026-06-24',
     notes:[

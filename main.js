@@ -374,7 +374,9 @@ function parseAmazonHtmlWithCheerio(html) {
     if (Number.isFinite(r) && r >= 0 && r < 10000000) data.ratings = r;
   }
   if (data.star !== undefined && (data.ratings === undefined || data.ratings === 0)) delete data.star;
+  const dealPriceMatch = html.match(/prime\s*day\s*deal|prime\s*(?:exclusive\s*)?deal|limited\s*time\s*deal|lightning\s*deal|7[-\s]?day\s*deal|best\s*deal/i);
   const priceCandidates = [
+    dealPriceMatch && dealPriceMatch.index !== undefined ? html.slice(dealPriceMatch.index, dealPriceMatch.index + 4200) : '',
     $('#corePriceDisplay_desktop_feature_div .priceToPay .a-offscreen').first().text(),
     $('#corePriceDisplay_desktop_feature_div .a-price .a-offscreen').first().text(),
     $('#corePriceDisplay_mobile_feature_div .a-price .a-offscreen').first().text(),
