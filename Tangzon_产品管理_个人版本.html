@@ -1789,6 +1789,12 @@ function _firstPriceInText(s){
 }
 function _extractPriceFromHtml(htmlText){
   if(!htmlText||htmlText.length<500)return null;
+  var dealText=htmlText.match(/prime\s*day\s*deal|prime\s*(?:exclusive\s*)?deal|limited\s*time\s*deal|lightning\s*deal|7[-\s]?day\s*deal|best\s*deal/i);
+  if(dealText&&dealText.index!==undefined){
+    var dealWindow=htmlText.substr(dealText.index,4200);
+    var dealPrice=_firstPriceInText(dealWindow);
+    if(dealPrice)return dealPrice;
+  }
   var jsonWindows=['priceToPay','corePriceDisplay','desktop_buybox_group','twister-plus-buying-options-price-data','buyingOption','aod-offer-price'];
   for(var jw=0;jw<jsonWindows.length;jw++){
     var ji=htmlText.toLowerCase().indexOf(jsonWindows[jw].toLowerCase());
