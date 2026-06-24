@@ -330,18 +330,14 @@ function parseAmazonHtmlWithCheerio(html) {
   };
   const promoTexts = [
     $('#dealBadge_feature_div').text(),
-    $('#couponBadge_feature_div').text(),
     $('#dealBadgeSupportingText').text(),
     $('#promoPriceBlockMessage_feature_div').text(),
-    $('#vpcButton').text(),
-    $('#couponText').text(),
     $('#reinvent_price_desktop_pickupMessage_feature_div').text(),
     $('[id*="dealBadge"]').text(),
-    $('[id*="coupon"]').text(),
-    $('.dealBadge, .dealBadgeTextColor, .priceBlockBadge, .savingsPercentage, .couponBadge, .couponLabel, [class*="coupon"]').text()
+    $('.dealBadge, .dealBadgeTextColor, .priceBlockBadge').text()
   ].map(cleanText).filter(Boolean);
   if (!promoTexts.length) {
-    const rawMatch = html.match(/limited\s*time\s*deal|prime\s*exclusive\s*deal|voucher|coupon|lightning\s*deal|7[-\s]?day\s*deal|best\s*deal/i);
+    const rawMatch = html.match(/limited\s*time\s*deal|prime\s*(?:exclusive\s*)?deal|prime\s*day\s*deal|lightning\s*deal|7[-\s]?day\s*deal|best\s*deal|top\s*deal|deal\s*price/i);
     if (rawMatch && rawMatch.index !== undefined) {
       promoTexts.push(cleanText(html.slice(Math.max(0, rawMatch.index - 500), rawMatch.index + 1500).replace(/<[^>]+>/g, ' ')));
     }
@@ -350,13 +346,13 @@ function parseAmazonHtmlWithCheerio(html) {
   const promoTags = [];
   if (/limited\s*time\s*deal/i.test(promoText)) promoTags.push('Limited time deal');
   if (/prime\s*exclusive\s*deal/i.test(promoText)) promoTags.push('Prime Exclusive Deal');
-  if (/\b(lightning|7[-\s]?day|best)\s*deal\b/i.test(promoText)) {
-    const m = promoText.match(/\b(lightning|7[-\s]?day|best)\s*deal\b/i);
+  if (/prime\s*day\s*deal/i.test(promoText)) promoTags.push('Prime Day Deal');
+  if (/prime\s*deal/i.test(promoText) && !promoTags.includes('Prime Exclusive Deal')) promoTags.push('Prime Deal');
+  if (/\b(lightning|7[-\s]?day|best|top)\s*deal\b/i.test(promoText)) {
+    const m = promoText.match(/\b(lightning|7[-\s]?day|best|top)\s*deal\b/i);
     if (m) promoTags.push(cleanText(m[0]).replace(/\b\w/g, c => c.toUpperCase()));
   }
-  if (/\b(voucher|coupon)\b/i.test(promoText)) promoTags.push(/voucher/i.test(promoText) ? 'Voucher' : 'Coupon');
-  const saveMatch = promoText.match(/\b(save|saving)\s*(?:up to\s*)?([0-9]{1,3}%|£\s*[0-9,.]+)/i) || promoText.match(/([0-9]{1,3}%|£\s*[0-9,.]+)\s*(?:off|discount)/i);
-  if (saveMatch) promoTags.push(cleanText(saveMatch[0]).slice(0, 36));
+  if (/deal\s*price/i.test(promoText)) promoTags.push('Deal price');
   if (!promoTags.length && /priceblock_dealprice|dealprice|dealBadge_feature_div|dealBadge/i.test(html)) promoTags.push('Deal price');
   if (promoTags.length) data.promoBadge = [...new Set(promoTags)].slice(0, 3).join(' + ');
 

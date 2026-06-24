@@ -611,6 +611,7 @@ body.dark .cpal{background:rgba(0,0,0,.7);}
         <button class="btn-c" onclick="retireSelected()" style="font-size:10px;color:var(--red);border-color:#fca5a5">批量淘汰</button>
         <button class="btn-c" onclick="clearSelection()" style="font-size:10px">取消</button>
       </div>
+      <div id="prod-filter-panel" style="padding:0 0 12px 0"></div>
       <div id="prod-owner-panel" style="display:none;padding:0 0 12px 0"></div>
       <div class="pg" id="prod-grid"></div>
     </div>
@@ -639,7 +640,7 @@ body.dark .cpal{background:rgba(0,0,0,.7);}
           <button data-pf="ended" onclick="setPromoFilter('ended')">已结束</button>
         </div>
         <div class="c-search promo-search"><span class="c-si">🔍</span><input id="promo-search-input" type="text" placeholder="筛选活动产品 ASIN / SKU…" oninput="setPromoSearch(this.value)"></div>
-        <button class="btn-c promo-fetch-btn" onclick="fetchPromoBadges()" style="font-size:11.5px;padding:6px 12px">抓取活动标/活动价</button>
+        <button class="btn-c promo-fetch-btn" id="promo-fetch-btn" onclick="fetchPromoBadges()" style="font-size:11.5px;padding:6px 12px">抓取活动标/活动价</button>
         <div class="promo-toolbar-fill"></div>
       </div>
       <div class="promo-list" id="promo-list"></div>
@@ -1145,6 +1146,7 @@ var PROMOTIONS={};  // { promo_id: {id,type,startDate,endDate,notes,products:[..
 var _promoFilter='all';  // 'all' | 'active' | 'upcoming' | 'ended'
 var _promoSearch='';  // activity product filter: ASIN / SKU / new SKU
 var _activeSubtype='';  // current 3rd-level filter, '' = 全部
+var _productNewOnly=false;  // product library filter: manual ASINs created in the last 90 days
 var SUB_OWNERS={"室内家居|Stepstools":"蒋玮","室内家居|Fireplace Spark Protection":"蒋玮","电器类|Teppanyaki Grills":"蒋玮","电器类|Electrical Fireplaces":"蒋玮","电器类|Sandwich Toasters & Panini Presses":"蒋玮","普通装饰类|Decorative Artificial Plants":"蒋玮","普通装饰类|Decorative Artificial Trees":"蒋玮","节日装饰类|Christmas Trees":"蒋玮","节日装饰类|Novelty Decorations":"蒋玮","厨房家具类|Outdoor Pizza Ovens":"蒋玮","厨房家具类|Bar Sets":"蒋玮","厨房家具类|Bar Tables":"蒋玮","厨房家具类|Dining Room Sets":"蒋玮","厨房家具类|Dining Chairs":"蒋玮","厨房家具类|Folding Chairs":"蒋玮","厨房家具类|Barstools":"蒋玮","厨房家具类|Dining Tables":"蒋玮","工具汽配类|Stepladders":"蒋玮","工具汽配类|Material Handling Ramps":"蒋玮","工具汽配类|Roof Racks":"蒋玮","工具汽配类|Roof Boxes":"蒋玮","工具汽配类|Pressure Washer Lances & Wands":"蒋玮","工具汽配类|Crimpers":"蒋玮","工具汽配类|Engine Hoists":"蒋玮","工具汽配类|Motorbike Stands":"蒋玮","工具汽配类|Motorbike Lifts":"蒋玮","工具汽配类|Axle Stands":"蒋玮","工具汽配类|Garage Shelves":"蒋玮","工具汽配类|Gun Cabinets":"蒋玮","工具汽配类|Wheelchair & Mobility Scooter Ramps":"蒋玮","野营遮阳类|Parasol Stands & Bases":"蒋玮","野营遮阳类|Garden Parasols":"蒋玮","野营遮阳类|Pop-Up Tents":"蒋玮","野营遮阳类|Beach Umbrellas":"蒋玮","野营遮阳类|Outdoor Canopies":"蒋玮","野营遮阳类|Camping Coolers & Cool Bags":"蒋玮","野营遮阳类|Camp Stoves":"蒋玮","野营遮阳类|Gazebos":"蒋玮","野营遮阳类|Event Shelters":"蒋玮","野营遮阳类|Window Awnings & Canopies":"蒋玮","野营遮阳类|Dome Tents":"蒋玮","户外家具|Garden Dining Chairs":"蒋玮","户外家具|Charcoal Barbecues":"蒋玮","户外家具|Patio Bistro Sets":"蒋玮","户外家具|Outdoor Cocktail Tables":"蒋玮","户外家具|Patio Dining Sets":"蒋玮","户外家具|Benches":"蒋玮"};  // {cat+'|'+sub: '运营姓名'}  // {cat+'|'+sub: '运营姓名'}
 var PROD_SALES={};  // {asin: sales_amount}  — product-page sales, independent from analysis
 var OWNER_COLORS=['#3370ff','#2ba471','#c08a2e','#d54941','#6554c0','#1d8cb3','#e37318','#9a6b3f'];
@@ -1555,6 +1557,29 @@ function setProductSubtype(asin, newType){
   toast('✓ 已设置: '+(newType||'无类型'));
 }
 
+function _isManualNewProduct(it){
+  if(!it||it.source!=='manual'||!it.createdAt)return false;
+  var t=new Date(it.createdAt).getTime();
+  if(isNaN(t))return false;
+  return Date.now()-t<=90*86400000;
+}
+function buildProductFilterBar(){
+  var el=q('prod-filter-panel');if(!el)return;
+  var scoped=getItems();
+  var newCnt=scoped.filter(_isManualNewProduct).length;
+  var totalCnt=scoped.length;
+  el.innerHTML='<div class="st-bar" style="margin-bottom:0">'
+    +'<span class="st-bar-label">产品筛选</span>'
+    +'<button class="st-chip'+(_productNewOnly?' active':'')+'" onclick="setProductNewFilter('+(!_productNewOnly)+')" title="手动新增且创建时间在 90 天内的 ASIN">新品<span class="st-chip-cnt">'+newCnt+'</span></button>'
+    +(_productNewOnly?'<button class="st-chip" onclick="setProductNewFilter(false)">全部<span class="st-chip-cnt">'+totalCnt+'</span></button>':'')
+    +'</div>';
+}
+function setProductNewFilter(on){
+  _productNewOnly=!!on;
+  renderGrid();
+  toast(_productNewOnly?'已筛选 90 天内手动新增产品':'已取消新品筛选');
+}
+
 // Open inline picker on the card subtype badge
 function pickSubtype(asin, evt){
   if(evt){evt.stopPropagation();evt.preventDefault();}
@@ -1821,19 +1846,16 @@ function _extractPromoBadgeFromHtml(htmlText){
   var chunks=[],anchors=[
     /id=["']dealBadge_feature_div["']/i,
     /id=["']dealBadgeSupportingText["']/i,
-    /id=["']couponBadge_feature_div["']/i,
     /id=["']promoPriceBlockMessage_feature_div["']/i,
-    /id=["']vpcButton["']/i,
-    /id=["']couponText["']/i,
-    /id=["'][^"']*(?:dealBadge|coupon)[^"']*["']/i,
-    /class=["'][^"']*(?:dealBadge|dealBadgeTextColor|couponBadge|couponLabel|savingsPercentage|coupon)[^"']*["']/i
+    /id=["'][^"']*dealBadge[^"']*["']/i,
+    /class=["'][^"']*(?:dealBadge|dealBadgeTextColor|priceBlockBadge)[^"']*["']/i
   ];
   anchors.forEach(function(re){
     var m=htmlText.match(re);
     if(m&&m.index!==undefined)chunks.push(htmlText.substr(m.index,2600));
   });
   if(!chunks.length){
-    var raw=htmlText.match(/limited\s*time\s*deal|prime\s*exclusive\s*deal|voucher|coupon|lightning\s*deal|7[-\s]?day\s*deal|best\s*deal/i);
+    var raw=htmlText.match(/limited\s*time\s*deal|prime\s*(?:exclusive\s*)?deal|prime\s*day\s*deal|lightning\s*deal|7[-\s]?day\s*deal|best\s*deal|top\s*deal|deal\s*price/i);
     if(raw&&raw.index!==undefined)chunks.push(htmlText.substr(Math.max(0,raw.index-500),2000));
   }
   var text=_stripHtmlText(chunks.join(' | '));
@@ -1842,11 +1864,11 @@ function _extractPromoBadgeFromHtml(htmlText){
   var tags=[];
   if(/limited\s*time\s*deal/i.test(text))tags.push('Limited time deal');
   if(/prime\s*exclusive\s*deal/i.test(text))tags.push('Prime Exclusive Deal');
-  var deal=text.match(/\b(lightning|7[-\s]?day|best)\s*deal\b/i);
+  if(/prime\s*day\s*deal/i.test(text))tags.push('Prime Day Deal');
+  if(/prime\s*deal/i.test(text)&&tags.indexOf('Prime Exclusive Deal')<0)tags.push('Prime Deal');
+  var deal=text.match(/\b(lightning|7[-\s]?day|best|top)\s*deal\b/i);
   if(deal)tags.push(deal[0].replace(/\b\w/g,function(c){return c.toUpperCase();}));
-  if(/\b(voucher|coupon)\b/i.test(text))tags.push(/voucher/i.test(text)?'Voucher':'Coupon');
-  var save=text.match(/\b(save|saving)\s*(?:up to\s*)?([0-9]{1,3}%|£\s*[0-9,.]+)/i)||text.match(/([0-9]{1,3}%|£\s*[0-9,.]+)\s*(?:off|discount)/i);
-  if(save)tags.push(save[0].slice(0,36));
+  if(/deal\s*price/i.test(text))tags.push('Deal price');
   if(!tags.length&&/priceblock_dealprice|dealprice|dealBadge_feature_div|dealBadge/i.test(htmlText))tags.push('Deal price');
   tags=tags.filter(function(v,i,a){return v&&a.indexOf(v)===i;});
   return tags.length?tags.slice(0,3).join(' + '):null;
@@ -2425,6 +2447,7 @@ function _promoProductMatches(x,qv){
 }
 function _promoAmazonBadgeHtml(x){
   var badge=(x.amazonBadge||x.promoBadge||'').trim();
+  if(badge&&!_isDealBadgeText(badge))badge='';
   if(badge){
     var stale=(x.amazonBadgeFound===false);
     return '<span class="promo-amz-badge '+(stale?'stale':'')+'" title="'+esc(stale?'上次抓到：'+badge:badge)+'">'+esc(badge)+'</span>';
@@ -2434,6 +2457,9 @@ function _promoAmazonBadgeHtml(x){
   }
   return '<span class="promo-amz-badge none" title="还未抓取活动标">未抓取</span>';
 }
+function _isDealBadgeText(s){
+  return /deal/i.test(String(s||''));
+}
 function _setPromoBadgeForAsin(asin,badge,found){
   return _applyPromoAmazonDetailsForAsin(asin,{promoBadge:badge,promoBadgeFound:found,checked:true});
 }
@@ -2442,6 +2468,7 @@ function _applyPromoAmazonDetailsForAsin(asin,details){
   details=details||{};
   var touched=0,priceTouched=0,now=Date.now();
   var badge=(details.promoBadge||'').trim();
+  if(badge&&!_isDealBadgeText(badge))badge='';
   var hasPrice=details.price!==undefined&&details.price!==null&&!isNaN(parseFloat(details.price))&&parseFloat(details.price)>0;
   var price=hasPrice?Math.round(parseFloat(details.price)*100)/100:null;
   var libPrice=0;
@@ -2458,6 +2485,7 @@ function _applyPromoAmazonDetailsForAsin(asin,details){
         x.amazonBadge=badge;
         x.amazonBadgeFound=true;
       }else if(details.checked){
+        delete x.amazonBadge;
         x.amazonBadgeFound=!!details.promoBadgeFound;
       }
       if(details.checked||badge)x.amazonBadgeFetchedAt=now;
@@ -2495,22 +2523,40 @@ function fetchPromoBadges(promoId){
   if(!targets.length){toast('没有活动产品需要抓取');return;}
   if(!confirm('将抓取 '+targets.length+' 个活动产品的 Amazon 活动标和当前活动价。会慢速执行，避免请求过快。开始吗？'))return;
   _promoBadgeJob.running=true;
+  var btn=q('promo-fetch-btn');
+  if(btn){btn.disabled=true;btn.textContent='抓取中 0/'+targets.length;}
   var i=0,ok=0,badgeOk=0,priceOk=0,miss=0,fail=0;
+  function finishPromoJob(title){
+    _promoBadgeJob.running=false;
+    if(btn){btn.disabled=false;btn.textContent='抓取活动标/活动价';}
+    markDirty();save();renderPromoView();
+    var summary=(title||'活动抓取完成')+'：活动标 '+badgeOk+'，活动价 '+priceOk+'，未识别 '+miss+'，失败 '+fail;
+    if(q('promo-meta'))q('promo-meta').textContent=summary;
+    toast(summary);
+    var old=q('bg-job-promo');if(old)old.remove();
+    var w=document.createElement('div');
+    w.className='bg-job done';
+    w.id='bg-job-promo';
+    w.innerHTML='<div class="bg-job-hd"><div class="bg-job-spin"></div><div class="bg-job-title">'+esc(title||'活动抓取完成')+'</div><button class="bg-job-close" title="关闭">✓</button></div>'
+      +'<div class="bg-job-prog"><div class="bg-job-stats"><span><b>'+i+'</b>/'+targets.length+'</span><span><span class="ok">标 '+badgeOk+'</span>　<span class="ok">价 '+priceOk+'</span>　<span class="fail">失败 '+fail+'</span></span></div>'
+      +'<div style="font-size:11px;color:var(--tx3);line-height:1.5">未识别 '+miss+' 个；仅识别包含 Deal 字样的活动标，价格会继续独立尝试抓取。</div></div>';
+    document.body.appendChild(w);
+    var close=w.querySelector('.bg-job-close');if(close)close.onclick=function(){w.remove();};
+    setTimeout(function(){if(w&&document.body.contains(w))w.style.opacity='0';},6500);
+    setTimeout(function(){if(w&&document.body.contains(w))w.remove();},7200);
+  }
   function next(){
     if(i>=targets.length){
-      _promoBadgeJob.running=false;
-      markDirty();save();renderPromoView();
-      toast('活动抓取完成：活动标 '+badgeOk+'，活动价 '+priceOk+'，未识别 '+miss+'，失败 '+fail);
+      finishPromoJob('活动抓取完成');
       return;
     }
     var asin=targets[i].asin;
+    if(btn)btn.textContent='抓取中 '+(i+1)+'/'+targets.length;
     if(q('promo-meta'))q('promo-meta').textContent='正在抓取活动标/活动价 '+(i+1)+'/'+targets.length+' · '+asin;
     fetchAmazonPromoDetails(asin).then(function(res){
       if(res&&res.error==='robot_check'){
         fail++;
-        _promoBadgeJob.running=false;
-        toast('遇到 Amazon 保护，活动标抓取已暂停');
-        renderPromoView();
+        finishPromoJob('遇到 Amazon 保护，已暂停');
         return;
       }
       if(res&&(res.promoBadge||res.price!==undefined)){
@@ -3264,8 +3310,10 @@ function selCat(cat,sub){
 // PRODUCT GRID ────────────────────────────────────────────────────
 function scheduleRender(){clearTimeout(_renderTimer);_renderTimer=setTimeout(renderGrid,60);}
 function renderGrid(){
+  buildProductFilterBar();
   buildSubtypeBar();
   var items=getItems(),grid=q('prod-grid');if(!grid)return;
+  if(_productNewOnly)items=items.filter(_isManualNewProduct);
   // Apply 3rd-level filter
   if(_activeSubtype){
     if(_activeSubtype==='__none__'){items=items.filter(function(it){return !it.subtype;});}
@@ -3916,6 +3964,8 @@ function confirmProd(){var asin=q('inp-asin').value.trim().toUpperCase();if(!asi
         if(_pi.ratingFetchedAt)_preserved.ratingFetchedAt=_pi.ratingFetchedAt;
         if(_pi._retiredFrom)_preserved._retiredFrom=_pi._retiredFrom;
         if(_pi._retiredAt)_preserved._retiredAt=_pi._retiredAt;
+        if(_pi.source)_preserved.source=_pi.source;
+        if(_pi.createdAt)_preserved.createdAt=_pi.createdAt;
         if(_pi.img)_preserved.img=_pi.img;
       }
     }
@@ -3930,6 +3980,9 @@ function confirmProd(){var asin=q('inp-asin').value.trim().toUpperCase();if(!asi
   if(_preserved.ratingFetchedAt)item.ratingFetchedAt=_preserved.ratingFetchedAt;
   if(_preserved._retiredFrom)item._retiredFrom=_preserved._retiredFrom;
   if(_preserved._retiredAt)item._retiredAt=_preserved._retiredAt;
+  if(_preserved.source)item.source=_preserved.source;
+  if(_preserved.createdAt)item.createdAt=_preserved.createdAt;
+  if(!eid){item.source='manual';item.createdAt=new Date().toISOString();}
   if(_preserved.img&&!item.img)item.img=_preserved.img;
   if(pendImg){if(typeof IMGS!=='undefined')IMGS[asin]=pendImg;}snapshotForUndo();if(eid&&ecat===cat&&esub===sub&&_oldIdx>=0){DATA[cat][sub].splice(_oldIdx,0,item);}else{DATA[cat][sub].push(item);}syncReviewSnapshotForItem(item);removeRetiredIfInLibrary(asin);closeMo('mo-prod');markDirty();buildSidebar();renderGrid();updateStats();toast((eid?'✓ 已保存':'✓ 已添加')+' '+asin);}
 function removeProd(asin){
@@ -7109,10 +7162,19 @@ function exportPromoAmazonCsv(promoId){
 // 更新日志 (Changelog)
 // 每次发新版，在 CHANGELOG 数组最前面加一条即可。
 // ════════════════════════════════════════════════════════════════
-var APP_VERSION='3.5.21';
+var APP_VERSION='3.5.22';
 // 标题栏自动显示当前版本号（跟随 APP_VERSION，不用手动改）
 try{ document.title = 'Tangzon 产品管理 v' + APP_VERSION; }catch(e){}
 var CHANGELOG=[
+  {
+    v:'3.5.22', date:'2026-06-24',
+    notes:[
+      '新增：产品库支持筛选新品，新品定义为手动添加且创建时间在 90 天内的 ASIN',
+      '优化：活动池抓取完成后显示更明确的结果反馈，包含活动标、活动价、未识别和失败数量',
+      '优化：活动标只识别包含 Deal 的活动文案，如 Best Deal、Prime Deal、Limited time deal、Lightning Deal',
+      '调整：Coupon、Voucher、Save/Off 等非 Deal 文案不再作为活动标显示，但活动价仍会独立尝试抓取'
+    ]
+  },
   {
     v:'3.5.21', date:'2026-06-24',
     notes:[
