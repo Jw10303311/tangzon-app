@@ -255,11 +255,12 @@ a{color:inherit;text-decoration:none;}
 .edit-mode .pc-add{display:flex;}
 
 /* MODAL */
-.mo{position:fixed;inset:0;background:rgba(15,23,42,.5);z-index:500;display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity .2s var(--easing);backdrop-filter:blur(4px);}
+.mo{position:fixed;inset:0;background:rgba(15,23,42,.5);z-index:500;display:flex;align-items:safe center;justify-content:safe center;opacity:0;pointer-events:none;transition:opacity .2s var(--easing);backdrop-filter:blur(4px);overflow:auto;padding:18px;box-sizing:border-box;}
 .mo.open{opacity:1;pointer-events:all;}
-.md{background:var(--sur);border-radius:var(--r-lg);padding:24px;width:380px;max-width:92vw;box-shadow:var(--sh-xl);transform:translateY(12px) scale(.98);transition:transform .25s var(--easing);position:relative;border:1px solid var(--bor);}
+.md{background:var(--sur);border-radius:var(--r-lg);padding:24px;width:380px;max-width:92vw;max-height:calc(100vh - 36px);box-shadow:var(--sh-xl);transform:translateY(12px) scale(.98);transition:transform .25s var(--easing);position:relative;border:1px solid var(--bor);box-sizing:border-box;}
 .mo.open .md{transform:translateY(0) scale(1);}
 .md-wide{width:480px;}
+#mo-app-settings .md{width:min(430px,calc(100vw - 32px));overflow-y:auto;overscroll-behavior:contain;}
 .md-title{font-family:"Inter",sans-serif;font-size:16px;font-weight:700;margin-bottom:4px;letter-spacing:-.02em;color:var(--tx);}
 .md-sub{font-size:12px;color:var(--tx3);margin-bottom:18px;font-weight:500;}
 .md-x{position:absolute;top:14px;right:14px;width:26px;height:26px;border-radius:50%;border:1px solid var(--bor);background:var(--sur2);color:var(--tx3);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:10px;transition:all .14s var(--easing);}
@@ -876,7 +877,8 @@ body.dark .cpal{background:rgba(0,0,0,.7);}
         </select>
       </div>
     </div>
-    <div style="margin-top:8px;text-align:right">
+    <div style="margin-top:8px;display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap">
+      <button onclick="clearAmazonProtection()" style="background:transparent;border:0;color:var(--red);font-size:11px;cursor:pointer;text-decoration:underline;font-family:inherit;padding:0">解除 Amazon 保护暂停</button>
       <button onclick="previewRatingTargets()" style="background:transparent;border:0;color:var(--accent);font-size:11px;cursor:pointer;text-decoration:underline;font-family:inherit;padding:0">预览今日会抓哪些产品 →</button>
     </div>
   </div>
@@ -1696,26 +1698,30 @@ setInterval(function(){
   Object.keys(_AMZ_PAGE_CACHE).forEach(function(a){if(now-(_AMZ_PAGE_CACHE[a].t||0)>15*60*1000)delete _AMZ_PAGE_CACHE[a];});
 },10*60*1000);
 function _amazonUrl(asin){return 'https://www.amazon.co.uk/dp/'+asin+'?th=1&psc=1';}
+function _amazonProductUrl(asin){return 'https://www.amazon.co.uk/gp/product/'+asin+'?th=1&psc=1';}
 function _amazonOfferUrl(asin){return 'https://www.amazon.co.uk/gp/product/ajax/ref=dp_aod_ALL_mbc?asin='+asin+'&pc=dp';}
-function _fetchAmazonPageSafe(asin){
+function _fetchAmazonHtmlSafe(asin,url,key,referer){
   asin=(asin||'').trim().toUpperCase();
   if(!/^[A-Z0-9]{10,12}$/.test(asin))return Promise.resolve(null);
   var now=Date.now();
   if(_AMZ_ROBOT_UNTIL&&now<_AMZ_ROBOT_UNTIL)return Promise.resolve({error:'robot_check'});
-  var cached=_AMZ_PAGE_CACHE[asin];
+  var cacheKey=key||asin;
+  var cached=_AMZ_PAGE_CACHE[cacheKey];
   if(cached&&cached.t&&now-cached.t<10*60*1000)return cached.promise;
   var controller=(typeof AbortController!=='undefined')?new AbortController():null;
   var timer=controller?setTimeout(function(){try{controller.abort();}catch(e){}},15000):null;
-  var p=fetch(_amazonUrl(asin),{
+  var headers={
+    'Accept':'text/html,application/xhtml+xml,*/*',
+    'Accept-Language':'en-GB,en;q=0.9',
+    'User-Agent':'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+  };
+  if(referer)headers.Referer=referer;
+  var p=fetch(url,{
     method:'GET',
     credentials:'omit',
     cache:'no-store',
     signal:controller?controller.signal:undefined,
-    headers:{
-      'Accept':'text/html,application/xhtml+xml,*/*',
-      'Accept-Language':'en-GB,en;q=0.9',
-      'User-Agent':'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-    }
+    headers:headers
   }).then(function(r){return r&&r.ok?r.text():null;}).then(function(t){
     if(timer)clearTimeout(timer);
     if(!t)return null;
@@ -1723,42 +1729,16 @@ function _fetchAmazonPageSafe(asin){
       _AMZ_ROBOT_UNTIL=Date.now()+30*60*1000;
       return {error:'robot_check'};
     }
-    return {html:t,url:_amazonUrl(asin)};
+    return {html:t,url:url};
   }).catch(function(e){if(timer)clearTimeout(timer);return null;});
-  _AMZ_PAGE_CACHE[asin]={t:now,promise:p};
+  _AMZ_PAGE_CACHE[cacheKey]={t:now,promise:p};
   return p;
 }
+function _fetchAmazonPageSafe(asin){return _fetchAmazonHtmlSafe(asin,_amazonUrl(asin),asin);}
+function _fetchAmazonProductPageSafe(asin){return _fetchAmazonHtmlSafe(asin,_amazonProductUrl(asin),asin+'::product',_amazonUrl(asin));}
 function _fetchAmazonOfferPageSafe(asin){
   asin=(asin||'').trim().toUpperCase();
-  if(!/^[A-Z0-9]{10,12}$/.test(asin))return Promise.resolve(null);
-  var now=Date.now(),key=asin+'::offer';
-  if(_AMZ_ROBOT_UNTIL&&now<_AMZ_ROBOT_UNTIL)return Promise.resolve({error:'robot_check'});
-  var cached=_AMZ_PAGE_CACHE[key];
-  if(cached&&cached.t&&now-cached.t<10*60*1000)return cached.promise;
-  var controller=(typeof AbortController!=='undefined')?new AbortController():null;
-  var timer=controller?setTimeout(function(){try{controller.abort();}catch(e){}},15000):null;
-  var p=fetch(_amazonOfferUrl(asin),{
-    method:'GET',
-    credentials:'omit',
-    cache:'no-store',
-    signal:controller?controller.signal:undefined,
-    headers:{
-      'Accept':'text/html,application/xhtml+xml,*/*',
-      'Accept-Language':'en-GB,en;q=0.9',
-      'Referer':_amazonUrl(asin),
-      'User-Agent':'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-    }
-  }).then(function(r){return r&&r.ok?r.text():null;}).then(function(t){
-    if(timer)clearTimeout(timer);
-    if(!t)return null;
-    if(/Robot Check|To discuss automated access|api-services-support@amazon/i.test(t)){
-      _AMZ_ROBOT_UNTIL=Date.now()+30*60*1000;
-      return {error:'robot_check'};
-    }
-    return {html:t,url:_amazonOfferUrl(asin)};
-  }).catch(function(e){if(timer)clearTimeout(timer);return null;});
-  _AMZ_PAGE_CACHE[key]={t:now,promise:p};
-  return p;
+  return _fetchAmazonHtmlSafe(asin,_amazonOfferUrl(asin),asin+'::offer',_amazonUrl(asin));
 }
 function _parsePriceNumber(s){
   if(!s)return null;
@@ -5622,6 +5602,16 @@ function _loadRatingFailState(){
 function _saveRatingFailState(s){
   try{localStorage.setItem(_ratingFailKey(),JSON.stringify(s||{}));}catch(e){}
 }
+function clearAmazonProtection(){
+  _AMZ_ROBOT_UNTIL=0;
+  _AMZ_PAGE_CACHE={};
+  _saveRatingFailState({});
+  try{localStorage.removeItem(_ratingFailKey());}catch(e){}
+  var el=q('sb-rating-progress');
+  if(el){el.style.display='none';el.textContent='';el.title='';}
+  toast('已解除 Amazon 保护暂停');
+  if(typeof startRatingTrickle==='function')setTimeout(startRatingTrickle,900);
+}
 function _normalRatingQuota(v){
   v=parseInt(v,10);
   if(!v||v<10)v=100;
@@ -5726,7 +5716,23 @@ function _extractRatingFromHtml(htmlText){
   return null;
 }
 
-// Fetch rating for ONE asin (Electron direct fetch across regions)
+function _hasCoreAmazonDetails(d){
+  return !!(d&&d.star!==undefined&&d.ratings!==undefined&&d.price!==undefined&&d.price!==null&&d.img);
+}
+function _mergeAmazonOfferPrice(asin, base){
+  base=base||{};
+  if(base.price!==undefined&&base.price!==null)return Promise.resolve(base);
+  return _fetchAmazonOfferPageSafe(asin).then(function(offer){
+    if(!offer)return base;
+    if(offer.error)return Object.keys(base).length?base:offer;
+    var extra=_extractAmazonDetailsFromHtml(offer.html)||{};
+    var offerPrice=_extractPriceFromHtml(offer.html);
+    if(offerPrice!==null)extra.price=offerPrice;
+    return Object.assign({},base,extra);
+  }).catch(function(){return base;});
+}
+
+// Fetch rating for ONE asin (Electron direct fetch with safe fallback pages)
 function fetchAmazonRating(asin){
   if(!_isElectronEnv())return Promise.resolve(null);
   asin=asin.trim().toUpperCase();
@@ -5734,7 +5740,17 @@ function fetchAmazonRating(asin){
   return _fetchAmazonPageSafe(asin).then(function(page){
     if(!page)return null;
     if(page.error)return page;
-    return _parseAmazonDetails(page.html);
+    return _parseAmazonDetails(page.html).then(function(base){
+      if(_hasCoreAmazonDetails(base))return base;
+      return _fetchAmazonProductPageSafe(asin).then(function(prod){
+        if(prod&&prod.error)return base||prod;
+        if(!prod||!prod.html)return _mergeAmazonOfferPrice(asin,base);
+        return _parseAmazonDetails(prod.html).then(function(extra){
+          var merged=Object.assign({},base||{},extra||{});
+          return _mergeAmazonOfferPrice(asin,merged);
+        });
+      }).catch(function(){return _mergeAmazonOfferPrice(asin,base);});
+    });
   });
 }
 function fetchAmazonPromoDetails(asin){
@@ -5746,15 +5762,14 @@ function fetchAmazonPromoDetails(asin){
     if(page.error)return page;
     return _parseAmazonDetails(page.html).then(function(base){
       base=base||{};
-      if(base.price!==undefined&&base.price!==null)return base;
-      return _fetchAmazonOfferPageSafe(asin).then(function(offer){
-        if(!offer)return base;
-        if(offer.error)return Object.keys(base).length?base:offer;
-        var extra=_extractAmazonDetailsFromHtml(offer.html)||{};
-        var offerPrice=_extractPriceFromHtml(offer.html);
-        if(offerPrice!==null)extra.price=offerPrice;
-        return Object.assign({},base,extra);
-      }).catch(function(){return base;});
+      if(base.price!==undefined&&base.price!==null&&base.promoBadge)return base;
+      return _fetchAmazonProductPageSafe(asin).then(function(prod){
+        if(prod&&prod.error)return _mergeAmazonOfferPrice(asin,base);
+        if(!prod||!prod.html)return _mergeAmazonOfferPrice(asin,base);
+        return _parseAmazonDetails(prod.html).then(function(extra){
+          return _mergeAmazonOfferPrice(asin,Object.assign({},base,extra||{}));
+        });
+      }).catch(function(){return _mergeAmazonOfferPrice(asin,base);});
     });
   });
 }
@@ -7094,10 +7109,19 @@ function exportPromoAmazonCsv(promoId){
 // 更新日志 (Changelog)
 // 每次发新版，在 CHANGELOG 数组最前面加一条即可。
 // ════════════════════════════════════════════════════════════════
-var APP_VERSION='3.5.20';
+var APP_VERSION='3.5.21';
 // 标题栏自动显示当前版本号（跟随 APP_VERSION，不用手动改）
 try{ document.title = 'Tangzon 产品管理 v' + APP_VERSION; }catch(e){}
 var CHANGELOG=[
+  {
+    v:'3.5.21', date:'2026-06-24',
+    notes:[
+      '修复：设置窗口内容较多时会被屏幕截断，现在弹窗可在窗口内滚动显示',
+      '新增：设置中可手动解除 Amazon 保护暂停，并清空本轮抓取缓存',
+      '优化：星级/图片/价格抓取改为多路径尝试，商品页缺数据时会再尝试备用商品页和报价页',
+      '优化：活动产品价格抓取同样会走报价页兜底，提高活动价和当前价识别成功率'
+    ]
+  },
   {
     v:'3.5.20', date:'2026-06-24',
     notes:[
