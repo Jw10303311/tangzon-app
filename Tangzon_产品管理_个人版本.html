@@ -530,7 +530,7 @@ body.dark .cpal{background:rgba(0,0,0,.7);}
       <button class="hd-tab" id="tab-retired" onclick="switchTab('retired')">淘汰</button>
       <button class="hd-tab" id="tab-inbox" onclick="switchTab('inbox')">待分配<span id="tab-inbox-cnt" style="margin-left:4px;font-family:'JetBrains Mono',monospace;font-size:9.5px;background:var(--accent-bg);color:var(--accent);padding:1px 6px;border-radius:99px;display:none">0</span></button>
     </div>
-    <button class="hd-tab" onclick="openInboxQuickImport()" title="批量录入 ASIN / SKU / 小类" style="margin-left:8px;background:#fff;color:var(--accent);border-color:rgba(255,255,255,.75)">批量录入</button>
+    <button class="hd-tab" onclick="openInboxQuickImport()" title="批量录入 SKU / ASIN / 小类目名" style="margin-left:8px;background:#fff;color:var(--accent);border-color:rgba(255,255,255,.75)">批量录入</button>
     <button id="btn-pin-window" onclick="togglePinWindow()" title="窗口置顶 — 点击让窗口始终在最前" style="display:none;margin-left:10px;width:32px;height:32px;border:1px solid var(--bor);background:var(--sur);border-radius:8px;cursor:pointer;color:var(--tx3);transition:all .15s;align-items:center;justify-content:center;padding:0;flex-shrink:0">
       <svg id="pin-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="17" x2="12" y2="22"/><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z"/></svg>
     </button>
@@ -925,7 +925,7 @@ body.dark .cpal{background:rgba(0,0,0,.7);}
           <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
             <div class="dash-title">待分配产品</div>
             <span id="inbox-meta" style="font-size:11px;color:var(--tx3)"></span>
-            <button class="btn-c" onclick="openInboxQuickImport()" style="font-size:10px;color:var(--accent);border-color:var(--accent-bor);margin-left:auto;position:relative;z-index:3">批量录入 ASIN/SKU/小类</button>
+            <button class="btn-c" onclick="openInboxQuickImport()" style="font-size:10px;color:var(--accent);border-color:var(--accent-bor);margin-left:auto;position:relative;z-index:3">批量录入 SKU/ASIN/小类</button>
             <button class="btn-c" onclick="clearInbox()" style="font-size:10px;color:var(--red);border-color:#fca5a5;position:relative;z-index:3">清空待分配区</button>
           </div>
         </div>
@@ -1055,14 +1055,14 @@ body.dark .cpal{background:rgba(0,0,0,.7);}
 <div class="mo" id="mo-inbox-quick"><div class="md md-wide" style="width:620px;max-height:82vh;display:flex;flex-direction:column">
   <button class="md-x" onclick="closeMo('mo-inbox-quick')">✕</button>
   <div class="md-title">批量录入到待分配区</div>
-  <div class="md-sub">粘贴 ASIN、SKU、小类三列。支持 Excel 直接复制，也支持逗号 / Tab / 空格分隔。</div>
+  <div class="md-sub">导入格式固定为：SKU、ASIN 必填；小类目名选填。支持 Excel 直接复制，也支持逗号 / Tab / 空格分隔。</div>
   <div class="fg" style="margin-top:8px">
-    <label class="fl">ASIN + SKU + 小类</label>
-    <textarea class="fi" id="inbox-quick-text" rows="10" placeholder="ASIN&#9;SKU&#9;小类&#10;B0XXXXXXXX&#9;FP12345GB&#9;Electric Fireplaces&#10;B0YYYYYYYY&#9;FP12346GB&#9;Electric Fireplaces" style="font-family:'JetBrains Mono',monospace;font-size:12px;resize:vertical"></textarea>
+    <label class="fl">SKU * + ASIN * + 小类目名</label>
+    <textarea class="fi" id="inbox-quick-text" rows="10" placeholder="SKU&#9;ASIN&#9;小类目名&#10;FP12345GB&#9;B0XXXXXXXX&#9;Electric Fireplaces&#10;FP12346GB&#9;B0YYYYYYYY&#9;Electric Fireplaces" style="font-family:'JetBrains Mono',monospace;font-size:12px;resize:vertical"></textarea>
   </div>
   <div id="inbox-quick-drop" onclick="q('inbox-quick-file').click()" style="margin-top:8px;border:1px dashed var(--accent-bor);background:var(--accent-bg);border-radius:8px;padding:12px 14px;cursor:pointer;color:var(--accent);font-size:11.5px;line-height:1.55">
     <div style="font-weight:700">拖入 Excel / CSV 文件，或点击选择文件</div>
-    <div style="font-size:10.5px;color:var(--tx3);margin-top:2px">支持 .xlsx / .xls / .csv，会自动读取 ASIN、SKU、小类三列并填入上方文本框。</div>
+    <div style="font-size:10.5px;color:var(--tx3);margin-top:2px">支持 .xlsx / .xls / .csv，会自动读取 SKU、ASIN、小类目名三列并填入上方文本框。</div>
     <input type="file" id="inbox-quick-file" accept=".xlsx,.xls,.csv" style="display:none" onchange="handleInboxQuickFile(this.files&&this.files[0]);this.value='';">
   </div>
   <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:8px">
@@ -1090,7 +1090,7 @@ body.dark .cpal{background:rgba(0,0,0,.7);}
     <button onclick="confirmImportTarget('inbox')" style="text-align:left;padding:12px 14px;background:var(--sur2);border:1px solid var(--bor);border-radius:8px;cursor:pointer;font-family:inherit">
       <div style="font-weight:600;font-size:13px;color:var(--tx)">📥 导入到待分配区（推荐）</div>
       <div style="font-size:11px;color:var(--tx3);margin-top:3px;line-height:1.5">
-        只需要 <b>ASIN</b> 一列即可。其他列（sku / 新货号 / 价格 / 星级 / 评论数 / 大类 / 小类 / 细分类型 / 备注 / 等级 / 图片 / 竞品 / 销量）有就读，没有就跳过。<br>
+        必填 <b>SKU</b> 和 <b>ASIN</b> 两列；<b>小类目名</b> 选填，用于自动分组和推荐类目。<br>
         产品先进待分配区，抓好图后再自己归类。
       </div>
     </button>
@@ -1698,6 +1698,18 @@ function _extractImgFromHtml(htmlText){
       return {url:url};
     }
   }
+  var normalized=htmlText
+    .replace(/&quot;/g,'"')
+    .replace(/&#34;/g,'"')
+    .replace(/\\u002F/g,'/')
+    .replace(/\\\//g,'/')
+    .replace(/&amp;/g,'&');
+  var urls=normalized.match(/https:\/\/m\.media-amazon\.com\/images\/I\/[^"'<>\s]+?\.(?:jpg|jpeg|png|webp)(?:\?[^"'<>\s]*)?/ig)||[];
+  for(var j=0;j<urls.length;j++){
+    var u=urls[j];
+    if(/placeholder|transparent-pixel|sprite|grey-pixel|\/G\//i.test(u))continue;
+    return {url:u};
+  }
   return null;
 }
 
@@ -1910,8 +1922,14 @@ function _parseAmazonDetails(htmlText){
 }
 function _scrapeDirectFromAmazon(asin, domain){
   return _fetchAmazonPageSafe(asin).then(function(res){
-    if(!res||res.error)return res;
-    return _extractImgFromHtml(res.html);
+    if(res&&!res.error){
+      var hit=_extractImgFromHtml(res.html);
+      if(hit&&hit.url)return hit;
+    }
+    return _fetchAmazonProductPageSafe(asin).then(function(prod){
+      if(!prod||prod.error)return res&&res.error?res:prod;
+      return _extractImgFromHtml(prod.html);
+    }).catch(function(){return res&&res.error?res:null;});
   });
 }
 
@@ -2095,22 +2113,46 @@ function autoFetchImg(){
 // the CORS-proxy fallback for products where CDN URLs return 404.
 var _batchJob=null;  // {cancelled, ok, fail, done, total}
 
-function batchAutoFetchImgs(){
+function batchAutoFetchImgs(scope){
   if(_batchJob&&!_batchJob.done){toast('已有抓图任务在运行');return;}
   _warnIfFileProtocol();
-  var targets=[],haveImg=0,total=0;
-  Object.keys(DATA).forEach(function(c){Object.keys(DATA[c]).forEach(function(s){
+  scope=scope||'all';
+  var targets=[],seen={},haveImg=0,total=0;
+  function addTarget(asin){
+    asin=(asin||'').trim().toUpperCase();
+    if(!asin||seen[asin])return;
+    seen[asin]=1;targets.push(asin);
+  }
+  if(scope==='all'||scope==='library'){
+    Object.keys(DATA).forEach(function(c){Object.keys(DATA[c]).forEach(function(s){
     DATA[c][s].forEach(function(it){
       total++;
       if(getImg(it.asin)){haveImg++;}
-      else{targets.push(it.asin);}
+      else{addTarget(it.asin);}
     });
-  });});
-  if(!targets.length){toast('当前所有产品都已有图片，无需抓取');return;}
+    });});
+  }
+  if(scope==='all'||scope==='retired'){
+    Object.keys(RETIRED||{}).forEach(function(asin){
+      total++;
+      if(getImg(asin)){haveImg++;}
+      else{addTarget(asin);}
+    });
+  }
+  if(scope==='all'||scope==='inbox'){
+    (UNASSIGNED||[]).forEach(function(it){
+      if(!it||!it.asin)return;
+      total++;
+      if(it.img||getImg(it.asin)){haveImg++;}
+      else{addTarget(it.asin);}
+    });
+  }
+  var scopeText=scope==='retired'?'淘汰区':(scope==='inbox'?'待分配区':(scope==='library'?'产品库':'全部区域'));
+  if(!targets.length){toast(scopeText+'当前都已有图片，无需抓取');return;}
 
   // Quick confirmation only if a lot (>20) — small batches just start
   if(targets.length>20){
-    if(!confirm('为 '+targets.length+' 个缺图产品抓取主图？\n（已有图片的 '+haveImg+' 个会自动跳过）\n\n抓取在后台进行，不影响你继续操作。'))return;
+    if(!confirm('为 '+scopeText+' '+targets.length+' 个缺图产品抓取主图？\n（已有图片的 '+haveImg+' 个会自动跳过）\n\n抓取在后台进行，不影响你继续操作。'))return;
   }
 
   _batchJob={cancelled:false,ok:0,fail:0,done:0,total:targets.length};
@@ -2183,7 +2225,11 @@ function batchAutoFetchImgs(){
       (function(a){
         fetchAmazonImg(a).then(function(url){
           if(_batchJob.cancelled){active--;pump();return;}
-          if(url){IMGS[a]=url;_batchJob.ok++;}else{_batchJob.fail++;}
+          if(url){
+            var targetItem=(typeof RETIRED!=='undefined'&&RETIRED&&RETIRED[a])?RETIRED[a]:null;
+            storeFetchedImage(a,url,targetItem);
+            _batchJob.ok++;
+          }else{_batchJob.fail++;}
           _batchJob.done++;
           active--;
           updateUI();
@@ -3093,6 +3139,7 @@ function getImg(asin){
     var it=DATA[loc.cat][loc.sub][loc.idx];
     if(it.img)return it.img;
   }
+  if(typeof RETIRED!=='undefined'&&RETIRED&&RETIRED[asin]&&RETIRED[asin].img)return RETIRED[asin].img;
   // Also check the 待分配区 (UNASSIGNED) products
   if(typeof UNASSIGNED!=='undefined'&&UNASSIGNED.length){
     for(var i=0;i<UNASSIGNED.length;i++){
@@ -3100,6 +3147,30 @@ function getImg(asin){
     }
   }
   return(typeof IMGS!=='undefined'&&IMGS[asin])||null;
+}
+
+function _applyImageToVisibleCards(asin,url){
+  if(!asin||!url)return;
+  document.querySelectorAll('.p-img[data-asin]').forEach(function(el){
+    if((el.getAttribute('data-asin')||'').toUpperCase()===asin){
+      el.innerHTML='<img src="'+url+'" loading="lazy" alt="">';
+    }
+  });
+  document.querySelectorAll('img[data-lazy-asin]').forEach(function(img){
+    if((img.getAttribute('data-lazy-asin')||'').toUpperCase()===asin)img.src=url;
+  });
+}
+
+function storeFetchedImage(asin,url,item){
+  asin=(asin||'').trim().toUpperCase();
+  if(!asin||!url)return false;
+  if(typeof IMGS!=='undefined')IMGS[asin]=url;
+  if(item)item.img=url;
+  if(typeof RETIRED!=='undefined'&&RETIRED&&RETIRED[asin])RETIRED[asin].img=url;
+  _applyImageToVisibleCards(asin,url);
+  markDirty();
+  if(typeof scheduleImgFlush==='function')scheduleImgFlush();
+  return true;
 }
 
 // Unified sales helpers — single source of truth
@@ -5109,6 +5180,7 @@ function renderRetired(){
     fh+='<option value="asc"'+(_retFilter.salesSort==='asc'?' selected':'')+'>\u9500\u91cf 低→高</option>';
     fh+='</select>';
     fh+='<button class="btn-c" style="font-size:9px;padding:3px 8px" onclick="_retFilter={time:\'\',cat:\'\',salesSort:\'none\'};renderRetired()">重置</button>';
+    fh+='<button class="btn-c" style="font-size:9px;padding:3px 8px;color:var(--accent);border-color:var(--accent-bor)" onclick="batchAutoFetchImgs(\'retired\')">抓淘汰缺图</button>';
     fh+='<input type="text" id="ret-asin-input" placeholder="搜索 ASIN / SKU / 类目…" value="'+(_retFilter.asin||'')+'" style="font-size:10px;border:1px solid var(--bor);border-radius:5px;padding:3px 8px;background:var(--sur);color:var(--tx1);width:180px;outline:none" oninput="setRetFilter(\'asin\',this.value)">';
     fh+='<span style="margin-left:auto;font-size:10px;color:var(--tx3)" id="ret-fc"></span>';
     fh+='</div>';
@@ -6451,9 +6523,7 @@ function inboxFetchOne(asin){
   toast('正在抓取 '+asin+' 的主图…');
   fetchAmazonImg(asin).then(function(url){
     if(url){
-      p.img=url;
-      if(typeof IMGS!=='undefined')IMGS[asin]=url;
-      if(typeof scheduleImgFlush==='function')scheduleImgFlush();
+      storeFetchedImage(asin,url,p);
       markDirty();save();renderInbox();
       toast('✓ '+asin+' 主图已抓取');
     } else {
@@ -6469,16 +6539,14 @@ function fetchInboxImage(p){
   if(p.img||getImg(asin))return Promise.resolve(false);
   return fetchAmazonImg(asin).then(function(url){
     if(url){
-      p.img=url;
-      if(typeof IMGS!=='undefined')IMGS[asin]=url;
+      storeFetchedImage(asin,url,p);
       changed=true;
       return true;
     }
     if(typeof fetchAmazonRating!=='function')return false;
     return fetchAmazonRating(asin).then(function(res){
       if(res&&res.img){
-        p.img=res.img;
-        if(typeof IMGS!=='undefined')IMGS[asin]=res.img;
+        storeFetchedImage(asin,res.img,p);
         changed=true;
       }
       return changed;
@@ -6655,7 +6723,7 @@ function _quickAoaToText(aoa){
   if(!aoa.length)return '';
   var first=aoa[0].map(function(c){return String(c||'').trim().toLowerCase();});
   var hasHeader=first.some(function(h){return h.indexOf('asin')>=0||h.indexOf('sku')>=0||h.indexOf('货号')>=0||h.indexOf('小类')>=0||h.indexOf('sub')>=0||h.indexOf('类目')>=0;});
-  var iA=0,iSku=1,iSub=2,start=0;
+  var iSku=0,iA=1,iSub=2,start=0;
   if(hasHeader){
     start=1;
     first.forEach(function(h,i){
@@ -6664,11 +6732,22 @@ function _quickAoaToText(aoa){
       if(h.indexOf('小类')>=0||h.indexOf('sub')>=0||h.indexOf('类目')>=0||h.indexOf('category')>=0)iSub=i;
     });
   }
-  var out=['ASIN\tSKU\t小类'];
+  var out=['SKU\tASIN\t小类目名'];
   aoa.slice(start).forEach(function(r){
     var asin=String(r[iA]||'').replace(/[^A-Z0-9]/gi,'').toUpperCase();
+    if(!hasHeader){
+      for(var x=0;x<r.length;x++){
+        var maybe=String(r[x]||'').replace(/[^A-Z0-9]/gi,'').toUpperCase();
+        if(/^[A-Z0-9]{10,12}$/.test(maybe)){asin=maybe;iA=x;break;}
+      }
+    }
     if(!/^[A-Z0-9]{10,12}$/.test(asin))return;
-    out.push([asin,String(r[iSku]||'').trim(),String(r[iSub]||'').trim()].join('\t'));
+    var sku=String(r[iSku]||'').trim();
+    if(!hasHeader&&iSku===iA){
+      for(var y=0;y<r.length;y++){if(y!==iA&&String(r[y]||'').trim()){sku=String(r[y]||'').trim();break;}}
+    }
+    if(!sku)return;
+    out.push([sku,asin,String(r[iSub]||'').trim()].join('\t'));
   });
   return out.join('\n');
 }
@@ -6689,7 +6768,7 @@ function handleInboxQuickFile(file){
       var ws=wb.Sheets[wb.SheetNames[0]];
       var aoa=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
       var text=_quickAoaToText(aoa);
-      if(!text||text.split(/\n/).length<2){toast('没有识别到有效 ASIN 行');return;}
+      if(!text||text.split(/\n/).length<2){toast('没有识别到有效 SKU + ASIN 行');return;}
       q('inbox-quick-text').value=text;
       previewInboxQuickImport();
       toast('✓ 已读取 '+file.name);
@@ -6781,8 +6860,8 @@ function _parseInboxQuickRows(){
   var lines=raw.split(/\r?\n/).map(function(l){return l.trim();}).filter(Boolean);
   if(!lines.length)return [];
   var first=_splitQuickLine(lines[0]).map(function(x){return String(x||'').toLowerCase();});
-  var hasHeader=first.some(function(x){return x.indexOf('asin')>=0||x.indexOf('sku')>=0||x.indexOf('小类')>=0||x.indexOf('sub')>=0;});
-  var iA=0,iSku=1,iSub=2,start=0;
+  var hasHeader=first.some(function(x){return x.indexOf('asin')>=0||x.indexOf('sku')>=0||x.indexOf('货号')>=0||x.indexOf('小类')>=0||x.indexOf('sub')>=0;});
+  var iSku=0,iA=1,iSub=2,start=0;
   if(hasHeader){
     start=1;
     first.forEach(function(h,i){
@@ -6794,10 +6873,25 @@ function _parseInboxQuickRows(){
   var rows=[];
   lines.slice(start).forEach(function(line){
     var cells=_splitQuickLine(line);
-    var asin=(cells[iA]||'').replace(/[^A-Z0-9]/gi,'').toUpperCase();
+    var asin='',sku='',sub='';
+    if(hasHeader){
+      asin=(cells[iA]||'').replace(/[^A-Z0-9]/gi,'').toUpperCase();
+      sku=(cells[iSku]||'').trim();
+      sub=(cells[iSub]||'').trim();
+    }else{
+      var asinIdx=-1,skuIdx=-1;
+      for(var ci=0;ci<cells.length;ci++){
+        var v=(cells[ci]||'').replace(/[^A-Z0-9]/gi,'').toUpperCase();
+        if(/^[A-Z0-9]{10,12}$/.test(v)){asin=v;asinIdx=ci;break;}
+      }
+      for(var si=0;si<cells.length;si++){
+        if(si===asinIdx)continue;
+        if((cells[si]||'').trim()){sku=(cells[si]||'').trim();skuIdx=si;break;}
+      }
+      sub=cells.filter(function(_,idx){return idx!==asinIdx&&idx!==skuIdx;}).join(' ').trim();
+    }
     if(!/^[A-Z0-9]{10,12}$/.test(asin))return;
-    var sku=(cells[iSku]||'').trim();
-    var sub=(cells[iSub]||'').trim();
+    if(!sku)return;
     var rec=_guessCategoryBySub(sub);
     rows.push({asin:asin,sku:sku,origSub:sub,origCat:rec?rec.cat:'',recCat:rec?rec.cat:'',recSub:rec?rec.sub:'',recScore:rec?rec.score:0});
   });
@@ -6817,7 +6911,7 @@ function previewInboxQuickImport(){
 }
 function confirmInboxQuickImport(){
   var rows=_parseInboxQuickRows();
-  if(!rows.length){toast('没有识别到有效 ASIN');return;}
+  if(!rows.length){toast('没有识别到有效 SKU + ASIN');return;}
   createRestorePoint('before-inbox-quick-import');
   var added=0,updated=0,skipped=0;
   rows.forEach(function(r){
@@ -6857,7 +6951,11 @@ function enrichInboxProducts(targets){
     var p=targets[i];
     toast('抓图 '+(i+1)+'/'+targets.length+' · '+p.asin);
     fetchInboxImage(p).then(function(changed){
-      if(changed)ok++;
+      if(changed){
+        ok++;
+        save();renderInbox();updateInboxBadge();
+        _applyImageToVisibleCards(p.asin,getImg(p.asin));
+      }
       i++;
       setTimeout(next,1800);
     }).catch(function(){i++;setTimeout(next,1800);});
@@ -6883,23 +6981,15 @@ function _importToInbox(text,type){
   function addRow(asin,fields){
     asin=(asin||'').replace(/[^A-Z0-9]/gi,'').toUpperCase();
     if(!asin||asin.length<10)return;
+    fields=fields||{};
+    if(!fields.sku){skipped++;return;}
     if(UNASSIGNED.some(function(p){return p.asin===asin;})){skipped++;return;}
     if(findItem(asin).cat){skipped++;return;}  // already in library
-    var p={asin:asin};
-    if(fields.sku)p.sku=fields.sku;
-    if(fields.new_sku)p.new_sku=fields.new_sku;
-    if(fields.price)p.price=fields.price;
-    if(fields.star)p.star=fields.star;
-    if(fields.ratings)p.ratings=fields.ratings;
-    if(fields.img)p.img=fields.img;
-    // REQ1: store original cat/sub as a hint for later assignment (if file had these)
-    if(fields.origCat)p._origCat=fields.origCat;
+    var rec=_guessCategoryBySub(fields.origSub||'');
+    var p={asin:asin,sku:fields.sku};
+    if(fields.origCat||rec)p._origCat=fields.origCat||(rec?rec.cat:null);
     if(fields.origSub)p._origSub=fields.origSub;
-    if(fields.note)p.note=fields.note;
-    if(fields.grade)p.grade=fields.grade;
-    if(fields.subtype)p.subtype=fields.subtype;
-    if(fields.comp_asins)p.comp_asins=fields.comp_asins;
-    if(fields.sales)PROD_SALES[asin]=fields.sales;
+    if(rec){p._recCat=rec.cat;p._recSub=rec.sub;p._recScore=rec.score;}
     UNASSIGNED.push(p);
     added++;
   }
@@ -6912,7 +7002,7 @@ function _importToInbox(text,type){
         Object.keys(src[c]).forEach(function(s){
           if(!Array.isArray(src[c][s]))return;
           src[c][s].forEach(function(it){
-            addRow(it.asin,{sku:it.sku,new_sku:it.new_sku,price:it.price,star:it.star,ratings:it.ratings,img:it.img,origCat:c,origSub:s,note:it.note,grade:it.grade,subtype:it.subtype,comp_asins:it.comp_asins,sales:PROD_SALES[it.asin]||it.sales});
+            addRow(it.asin,{sku:it.new_sku||it.sku,origCat:c,origSub:s});
           });
         });
       });
@@ -6924,26 +7014,14 @@ function _importToInbox(text,type){
     function pr(line){var c=[],cur='',q2=false;for(var i=0;i<line.length;i++){var ch=line[i];if(ch==='"')q2=!q2;else if(ch===','&&!q2){c.push(cur.trim());cur='';}else cur+=ch;}c.push(cur.trim());return c;}
     var hdr=pr(lines[0]).map(function(h){return h.replace(/^\uFEFF/,'').trim().toLowerCase();});
     function col(kws){for(var j=0;j<hdr.length;j++){for(var k=0;k<kws.length;k++){if(hdr[j].includes(kws[k]))return j;}}return -1;}
-    var iA=col(['asin']),iSK=col(['sku']),iNS=col(['新货号','new_sku','newsku']),iP=col(['价格','price']),iST=col(['星级','star','rating']),iR=col(['评论','review']);
-    var iCat=col(['大类','category','cat']),iSub=col(['小类','子类','subcat','subcategory']),iNote=col(['备注','note','notes']),iGrade=col(['等级','grade']);
-    var iSubtype=col(['细分类型','subtype','type']),iImg=col(['图片','image','base64']),iComp=col(['竞品','comp_asin','competitor']),iSales=col(['销量','sales','revenue','销售额']);
+    var iA=col(['asin']),iSK=col(['sku','货号']),iSub=col(['小类目名','小类','子类','subcat','subcategory']);
     if(iA<0){toast('未找到 ASIN 列。请确认文件首行有"ASIN"列名');return;}
+    if(iSK<0){toast('未找到 SKU 列。待分配区导入必须包含 SKU 和 ASIN');return;}
     lines.slice(1).forEach(function(line){
       var c=pr(line);
       addRow(c[iA],{
         sku:iSK>=0?c[iSK]:null,
-        new_sku:iNS>=0?c[iNS]:null,
-        price:iP>=0?parseFloat((c[iP]||'').replace(/[^0-9.]/g,''))||null:null,
-        star:iST>=0?parseFloat(c[iST]||'')||null:null,
-        ratings:iR>=0?parseInt((c[iR]||'').replace(/[^0-9]/g,''))||null:null,
-        origCat:iCat>=0?(c[iCat]||'').trim()||null:null,
-        origSub:iSub>=0?(c[iSub]||'').trim()||null:null,
-        note:iNote>=0?(c[iNote]||'').trim()||null:null,
-        grade:iGrade>=0?(c[iGrade]||'').trim().toUpperCase()||null:null,
-        subtype:iSubtype>=0?(c[iSubtype]||'').trim()||null:null,
-        img:iImg>=0?(c[iImg]||'').trim()||null:null,
-        comp_asins:iComp>=0?(c[iComp]||'').split(/[,，;；\s]+/).map(function(s){return s.trim().toUpperCase();}).filter(function(s){return /^[A-Z0-9]{10,12}$/.test(s);}):null,
-        sales:iSales>=0?parseFloat((c[iSales]||'').replace(/[^0-9.]/g,''))||null:null
+        origSub:iSub>=0?(c[iSub]||'').trim()||null:null
       });
     });
   }
@@ -7151,10 +7229,19 @@ function exportPromoAmazonCsv(promoId){
 // 更新日志 (Changelog)
 // 每次发新版，在 CHANGELOG 数组最前面加一条即可。
 // ════════════════════════════════════════════════════════════════
-var APP_VERSION='3.5.24';
+var APP_VERSION='3.5.25';
 // 标题栏自动显示当前版本号（跟随 APP_VERSION，不用手动改）
 try{ document.title = 'Tangzon 产品管理 v' + APP_VERSION; }catch(e){}
 var CHANGELOG=[
+  {
+    v:'3.5.25', date:'2026-06-26',
+    notes:[
+      '优化：待分配区抓图改为每成功一张立即保存并刷新卡片，不再等整批跑完才更新',
+      '优化：主图抓取增加 Amazon 动态图片、产品页和页面内图片 URL 多重兜底',
+      '修复：批量抓缺图现在会覆盖产品库、淘汰区和待分配区，淘汰区新增“抓淘汰缺图”入口',
+      '调整：待分配区导入格式固定为 SKU 和 ASIN 必填，小类目名选填；不再读取价格、星级、评论数等旧字段'
+    ]
+  },
   {
     v:'3.5.24', date:'2026-06-26',
     notes:[
