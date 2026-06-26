@@ -926,6 +926,7 @@ body.dark .cpal{background:rgba(0,0,0,.7);}
             <div class="dash-title">待分配产品</div>
             <span id="inbox-meta" style="font-size:11px;color:var(--tx3)"></span>
             <button class="btn-c" onclick="openInboxQuickImport()" style="font-size:10px;color:var(--accent);border-color:var(--accent-bor);margin-left:auto;position:relative;z-index:3">批量录入 ASIN/SKU/小类</button>
+            <button class="btn-c" onclick="clearInbox()" style="font-size:10px;color:var(--red);border-color:#fca5a5;position:relative;z-index:3">清空待分配区</button>
           </div>
         </div>
         <p style="font-size:11px;color:var(--tx3);margin:0">导入但还未归类的产品。抓好图后，勾选产品分配到你自己的大类/小类。</p>
@@ -933,7 +934,7 @@ body.dark .cpal{background:rgba(0,0,0,.7);}
       <div id="inbox-toolbar" style="display:none;align-items:center;gap:10px;padding:8px 12px;background:var(--accent-bg);border-radius:8px;margin-bottom:12px;flex-wrap:wrap">
         <span style="font-size:11px;color:var(--accent);font-weight:600" id="inbox-sel-count">已选 0 个</span>
         <button class="btn-c" onclick="openAssignModal()" style="font-size:10px;color:var(--accent);border-color:var(--accent-bor)">分配到类目</button>
-        <button class="btn-c" onclick="batchFetchInboxImgs()" style="font-size:10px">批量补资料</button>
+        <button class="btn-c" onclick="batchFetchInboxImgs()" style="font-size:10px">批量抓图</button>
         <button class="btn-c" onclick="clearInboxSelection()" style="font-size:10px">取消选择</button>
       </div>
       <div id="inbox-grid" class="pg"></div>
@@ -1066,7 +1067,7 @@ body.dark .cpal{background:rgba(0,0,0,.7);}
   </div>
   <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:8px">
     <label style="display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--tx2);cursor:pointer">
-      <input type="checkbox" id="inbox-quick-auto" checked style="width:15px;height:15px"> 导入后自动抓图、星级、评论数、价格
+      <input type="checkbox" id="inbox-quick-auto" checked style="width:15px;height:15px"> 导入后自动抓主图
     </label>
     <span id="inbox-quick-preview" style="font-size:11px;color:var(--tx3)"></span>
   </div>
@@ -5853,8 +5854,7 @@ function _pickRatingTargets(limit, scope, order, mode){
       var asin=(it.asin||'').toUpperCase();
       var fetched=it.ratingFetchedAt||0;
       var sales=(typeof PROD_SALES!=='undefined'&&PROD_SALES[asin])||it.sales||0;
-      var hasImg=!!(it.img||(typeof getImg==='function'&&getImg(asin)));
-      var missing=(!it.star?1:0)+(!it.ratings?1:0)+(!it.price?1:0)+(!hasImg?1:0);
+      var missing=(!it.star?1:0)+(!it.ratings?1:0)+(!it.price?1:0);
       var active=!!activeMap[asin];
       var ageDays=fetched?((now-fetched)/day):999;
       var freqDays=14;
@@ -6120,16 +6120,14 @@ function startRatingTrickle(){
       updateBar(asin);
       fetchAmazonRating(asin).then(function(res){
         var logEntry={asin:asin,time:Date.now(),ok:false,img:(typeof getImg==='function'?getImg(asin):'')};
-        if(res&&(res.star!==undefined||res.ratings!==undefined||res.price!==undefined||res.img||res.promoBadge)){
+        if(res&&(res.star!==undefined||res.ratings!==undefined||res.price!==undefined)){
           var loc=findItem(asin);
-          var promoApplied=(res.promoBadge||res.price!==undefined)?_applyPromoAmazonDetailsForAsin(asin,{promoBadge:res.promoBadge||'',promoBadgeFound:!!res.promoBadge,price:res.price,checked:!!res.promoBadge}):null;
           if(loc.cat){
             var it=DATA[loc.cat][loc.sub][loc.idx];
             if(it){
               if(res.star!==undefined)it.star=res.star;
               if(res.ratings!==undefined)it.ratings=res.ratings;
               if(res.price!==undefined)it.price=res.price;
-              if(res.img&&!getImg(asin)){IMGS[asin]=res.img;logEntry.img=res.img;_detail.img=res.img;}
               it.ratingFetchedAt=Date.now();
               if(typeof REVIEW_HIST!=='undefined'){
                 if(!REVIEW_HIST[asin])REVIEW_HIST[asin]=[];
@@ -6141,24 +6139,13 @@ function startRatingTrickle(){
               logEntry.star=res.star;
               logEntry.ratings=res.ratings;
               logEntry.price=res.price;
-              logEntry.promoBadge=res.promoBadge;
               logEntry.name=it.new_sku||it.sku||'';
               logEntry.img=it.img||logEntry.img||'';
               _detail.ok=true;
               _detail.newStar=res.star;
               _detail.newRatings=res.ratings;
               _detail.newPrice=res.price;
-              _detail.promoBadge=res.promoBadge;
             }
-          }
-          if(!logEntry.ok&&promoApplied&&promoApplied.touched){
-            ok++;
-            logEntry.ok=true;
-            logEntry.promoBadge=res.promoBadge;
-            logEntry.price=res.price;
-            _detail.ok=true;
-            _detail.promoBadge=res.promoBadge;
-            _detail.newPrice=res.price;
           }
         } else {
           _setRatingFetchedAt(asin);
@@ -6344,21 +6331,27 @@ function renderInbox(){
     var recLabel=(p._recCat||p._recSub)?[p._recCat,p._recSub].filter(Boolean).join(' / '):[p._origCat,p._origSub].filter(Boolean).join(' / ');
     var srcLabel=(p._origSub&&p._recSub&&p._origSub!==p._recSub)?' · 原始：'+p._origSub:'';
     var hint=recLabel?'<div style="font-size:10px;color:var(--accent);margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">推荐：'+esc(recLabel)+esc(srcLabel)+(p._recScore?' · '+p._recScore+'%':'')+'</div>':'';
-    var starLine=(p.star||p.ratings)?'<div style="font-size:10.5px;color:var(--tx3);margin-top:2px">★ '+(p.star?esc(String(p.star)):'-')+' · '+(p.ratings?esc(String(p.ratings)):'0')+' 评论</div>':'';
+    var starLine=p.star?buildStarRatingHTML(p):((p.ratings)?'<div class="p-nr">'+esc(String(p.ratings))+' 评论</div>':'<div class="p-nr">暂无评分</div>');
+    var subtypeLine=p.subtype?'<span class="p-subtype" title="细分类型">'+esc(p.subtype)+'</span>':'';
     return groupHtml+'<div class="pc'+(isSel?' sel-card':'')+'" data-asin="'+esc(p.asin)+'">'
       +'<label class="p-chk"><input type="checkbox" data-action="inbox-sel" data-asin="'+aa+'"'+(isSel?' checked':'')+' style="cursor:pointer"></label>'
       +'<div class="p-img" data-asin="'+esc(p.asin)+'">'+(img?'<img src="'+esc(img)+'" style="width:100%;height:100%;object-fit:contain">':'<span class="p-img-ph">📦</span>')+'</div>'
       +'<div class="p-body">'
-        +'<div style="margin-bottom:4px">'
+        +'<div style="display:flex;align-items:flex-start;gap:4px;margin-bottom:3px">'
           +(p.new_sku?'<span class="p-sku" style="font-size:11px;font-weight:700;color:#15803d;background:#dcfce7;border-color:#86efac" data-action="copy-sku" data-sku="'+encodeURIComponent(p.new_sku)+'">'+esc(p.new_sku)+'</span>'
-            :(p.sku?'<span class="p-sku" data-action="copy-sku" data-sku="'+encodeURIComponent(p.sku)+'">'+esc(p.sku)+'</span>':'<span class="p-sku-ph">-</span>'))
+            :(p.sku?'<span class="p-sku" style="flex:1" data-action="copy-sku" data-sku="'+encodeURIComponent(p.sku)+'">'+esc(p.sku)+'</span>':'<span class="p-sku-ph" style="flex:1">—</span>'))
+          +'<span class="grade-badge '+(p.grade?'grade-'+p.grade:'grade-none')+'" title="等级">'+(p.grade?esc(p.grade)+' 类':'—')+'</span>'
         +'</div>'
+        +subtypeLine
+        +(p.new_sku&&p.sku?'<span class="p-sku" style="font-size:9px;opacity:.7;margin-bottom:2px" data-action="copy-sku" data-sku="'+encodeURIComponent(p.sku)+'">旧: '+esc(p.sku)+'</span>':'')
         +hint
-        +'<div style="font-size:11.5px;color:var(--tx2);font-family:\'JetBrains Mono\',monospace;margin-bottom:3px">'+esc(p.asin)+'</div>'
-        +(p.price?'<div class="p-price">£'+esc(String(p.price))+'</div>':'<div style="font-size:11px;color:var(--tx3)">价格未知</div>')
+        +'<div class="p-arow"><a class="p-alink" href="https://www.amazon.co.uk/dp/'+esc(p.asin)+'" target="_blank" rel="noopener">'+esc(p.asin)+'</a>'
+        +'<button class="p-cpbtn" data-action="copy-asin" data-asin="'+aa+'">⎘</button></div>'
+        +(p.price?'<div class="p-price">£'+Number(p.price).toFixed(2)+'</div>':'<div class="p-price-na">价格未知</div>')
         +starLine
+        +(p.note?'<div style="font-size:10px;color:var(--tx3);margin-top:4px;line-height:1.4;max-height:28px;overflow:hidden">'+esc(p.note)+'</div>':'')
         +'<div style="display:flex;gap:6px;margin-top:6px">'
-          +'<button class="btn-c" data-action="inbox-fetch" data-asin="'+aa+'" style="font-size:9.5px;flex:1">补资料</button>'
+          +'<button class="btn-c" data-action="inbox-fetch" data-asin="'+aa+'" style="font-size:9.5px;flex:1">抓图</button>'
           +'<button class="btn-c" data-action="inbox-assign-one" data-asin="'+aa+'" style="font-size:9.5px;flex:1;color:var(--accent);border-color:var(--accent-bor)">分配</button>'
         +'</div>'
       +'</div>'
@@ -6407,6 +6400,15 @@ function clearInboxSelection(){
   _inboxSel=new Set();
   renderInbox();
 }
+function clearInbox(){
+  if(!UNASSIGNED.length){toast('待分配区已经是空的');return;}
+  if(!confirm('确认清空待分配区的 '+UNASSIGNED.length+' 个产品？\n\n只会清空待分配区，不会影响产品库和活动池。'))return;
+  createRestorePoint('before-clear-inbox');
+  UNASSIGNED=[];
+  _inboxSel=new Set();
+  markDirty();save();renderInbox();updateInboxBadge();
+  toast('已清空待分配区');
+}
 
 // Inbox card click delegation
 document.addEventListener('click',function(e){
@@ -6437,11 +6439,11 @@ document.addEventListener('click',function(e){
 function inboxFetchOne(asin){
   var p=UNASSIGNED.find(function(x){return x.asin===asin;});
   if(!p)return;
-  toast('正在补充 '+asin+' 的图片、星级、评论数和价格...');
-  fetchInboxDetails(p).then(function(ok){
+  toast('正在抓取 '+asin+' 的主图...');
+  fetchInboxImage(p).then(function(ok){
     markDirty();save();renderInbox();
-    toast(ok?'✓ '+asin+' 资料已更新':'未抓到 '+asin+' 的有效资料');
-  }).catch(function(){toast(asin+' 补资料出错');});
+    toast(ok?'✓ '+asin+' 主图已更新':'未抓到 '+asin+' 的主图');
+  }).catch(function(){toast(asin+' 抓图出错');});
   return;
   if(p.img||getImg(asin)){
     if(!confirm('该产品已有图片，确定重新抓取覆盖吗？'))return;
@@ -6460,21 +6462,25 @@ function inboxFetchOne(asin){
   }).catch(function(){toast('✗ '+asin+' 抓图出错');});
 }
 
-function fetchInboxDetails(p){
+function fetchInboxImage(p){
   if(!p||!p.asin)return Promise.resolve(false);
   var changed=false;
   var asin=p.asin;
-  var job=(typeof fetchAmazonRating==='function')?fetchAmazonRating(asin):Promise.resolve(null);
-  return job.then(function(res){
-    if(res){
-      if(res.star!==undefined){p.star=res.star;changed=true;}
-      if(res.ratings!==undefined){p.ratings=res.ratings;changed=true;}
-      if(res.price!==undefined){p.price=res.price;changed=true;}
-      if(res.img){p.img=res.img;if(typeof IMGS!=='undefined')IMGS[asin]=res.img;changed=true;}
+  if(p.img||getImg(asin))return Promise.resolve(false);
+  return fetchAmazonImg(asin).then(function(url){
+    if(url){
+      p.img=url;
+      if(typeof IMGS!=='undefined')IMGS[asin]=url;
+      changed=true;
+      return true;
     }
-    if(p.img||getImg(asin))return changed;
-    return fetchAmazonImg(asin).then(function(url){
-      if(url){p.img=url;if(typeof IMGS!=='undefined')IMGS[asin]=url;changed=true;}
+    if(typeof fetchAmazonRating!=='function')return false;
+    return fetchAmazonRating(asin).then(function(res){
+      if(res&&res.img){
+        p.img=res.img;
+        if(typeof IMGS!=='undefined')IMGS[asin]=res.img;
+        changed=true;
+      }
       return changed;
     });
   }).then(function(ok){
@@ -6485,33 +6491,10 @@ function fetchInboxDetails(p){
 
 // Batch fetch images for inbox products missing images
 function batchFetchInboxImgs(){
-  var detailTargets=UNASSIGNED.filter(function(p){return !(p.img||getImg(p.asin))||!p.star||!p.ratings||!p.price;});
-  if(!detailTargets.length){toast('待分配区没有需要补充资料的产品');return;}
-  if(!confirm('将为 '+detailTargets.length+' 个待分配产品补充图片、星级、评论数和价格。开始吗？'))return;
+  var detailTargets=UNASSIGNED.filter(function(p){return !(p.img||getImg(p.asin));});
+  if(!detailTargets.length){toast('待分配区没有缺图产品');return;}
+  if(!confirm('将为 '+detailTargets.length+' 个待分配产品抓取主图。开始吗？'))return;
   enrichInboxProducts(detailTargets);
-  return;
-  var targets=UNASSIGNED.filter(function(p){return !(p.img||getImg(p.asin));});
-  if(!targets.length){toast('待分配区没有缺图的产品');return;}
-  if(!confirm('将为 '+targets.length+' 个缺图产品抓取主图，预计需要一些时间。开始吗？'))return;
-  var i=0,ok=0;
-  function next(){
-    if(i>=targets.length){
-      markDirty();save();renderInbox();
-      toast('抓图完成：成功 '+ok+' / '+targets.length);
-      return;
-    }
-    var asin=targets[i].asin;
-    toast('抓图中 '+(i+1)+'/'+targets.length+'…');
-    fetchAmazonImg(asin).then(function(url){
-      if(url){
-        targets[i].img=url;
-        if(typeof IMGS!=='undefined')IMGS[asin]=url;
-        ok++;
-      }
-      i++;setTimeout(next,1200);
-    }).catch(function(){i++;setTimeout(next,1200);});
-  }
-  next();
 }
 
 // ── Assign workflow ─────────────────────────────────────────────
@@ -6868,16 +6851,16 @@ function enrichInboxProducts(targets){
   function next(){
     if(i>=targets.length){
       markDirty();save();renderInbox();
-      toast('待分配资料补充完成：成功 '+ok+' / '+targets.length);
+      toast('待分配抓图完成：成功 '+ok+' / '+targets.length);
       return;
     }
     var p=targets[i];
-    toast('补资料 '+(i+1)+'/'+targets.length+' · '+p.asin);
-    fetchInboxDetails(p).then(function(changed){
+    toast('抓图 '+(i+1)+'/'+targets.length+' · '+p.asin);
+    fetchInboxImage(p).then(function(changed){
       if(changed)ok++;
       i++;
-      setTimeout(next,3500);
-    }).catch(function(){i++;setTimeout(next,3500);});
+      setTimeout(next,1800);
+    }).catch(function(){i++;setTimeout(next,1800);});
   }
   next();
 }
@@ -7168,10 +7151,19 @@ function exportPromoAmazonCsv(promoId){
 // 更新日志 (Changelog)
 // 每次发新版，在 CHANGELOG 数组最前面加一条即可。
 // ════════════════════════════════════════════════════════════════
-var APP_VERSION='3.5.23';
+var APP_VERSION='3.5.24';
 // 标题栏自动显示当前版本号（跟随 APP_VERSION，不用手动改）
 try{ document.title = 'Tangzon 产品管理 v' + APP_VERSION; }catch(e){}
 var CHANGELOG=[
+  {
+    v:'3.5.24', date:'2026-06-26',
+    notes:[
+      '新增：待分配区支持一键清空，清空前会自动生成恢复点',
+      '优化：待分配区产品卡补齐产品库同类展示，包含货号、等级、细分类型、价格、评分、备注和 Amazon 跳转',
+      '调整：待分配区导入和批量处理只抓主图，不再抓星级、评论数和价格',
+      '调整：日常自动更新只写入产品库星级、评论数和普通价格，活动标和活动价只在活动池抓取入口执行'
+    ]
+  },
   {
     v:'3.5.23', date:'2026-06-24',
     notes:[

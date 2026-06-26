@@ -1,0 +1,8 @@
+﻿sandbox_mode = "workspace-write"
+network_access = true
+approval_policy = "never"
+
+[workspace]
+trusted = true
+root = "C:\\Users\\jay\\Desktop\\tangzon-app\\tangzon-app"
+writable_roots = ["C:\\Users\\jay\\Desktop\\tangzon-app\\tangzon-app"]
