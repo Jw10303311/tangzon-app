@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
@@ -1633,7 +1633,10 @@ var _IMG_CDN_PATTERNS=[
   'https://images-eu.ssl-images-amazon.com/images/P/{asin}.01.L.jpg',
   'https://images-na.ssl-images-amazon.com/images/P/{asin}.01.L.jpg',
   'https://m.media-amazon.com/images/P/{asin}.01.L.jpg',
-  'https://images-eu.ssl-images-amazon.com/images/P/{asin}.01._SCRMZZZZZZ_.jpg'
+  'https://images-eu.ssl-images-amazon.com/images/P/{asin}.01._SCRMZZZZZZ_.jpg',
+  'https://m.media-amazon.com/images/P/{asin}.01._AC_SL1500_.jpg',
+  'https://m.media-amazon.com/images/P/{asin}.01._AC_SX679_.jpg',
+  'https://images-eu.ssl-images-amazon.com/images/P/{asin}.01._AC_SL1500_.jpg'
 ];
 
 function _testImgUrl(url){
@@ -2030,33 +2033,134 @@ function fetchAmazonImg(asin){
   return tryCdn();
 }
 
+var _IMG_RETRY_STATE=null,_IMG_RETRY_RUNNING=false,_IMG_RETRY_TIMER=null;
+function _imgRetryKey(){return 'tz3_img_retry_state';}
+function _allImageTargetAsins(scope){
+  scope=scope||'all';
+  var seen={},out=[];
+  function add(asin){
+    asin=(asin||'').trim().toUpperCase();
+    if(!/^[A-Z0-9]{10,12}$/.test(asin)||seen[asin])return;
+    seen[asin]=1;out.push(asin);
+  }
+  if(scope==='all'||scope==='library')Object.keys(DATA||{}).forEach(function(c){Object.keys(DATA[c]||{}).forEach(function(s){(DATA[c][s]||[]).forEach(function(it){if(it)add(it.asin);});});});
+  if(scope==='all'||scope==='retired')Object.keys(RETIRED||{}).forEach(add);
+  if(scope==='all'||scope==='inbox')(UNASSIGNED||[]).forEach(function(it){if(it)add(it.asin);});
+  return out;
+}
+function _missingImageAsins(scope){return _allImageTargetAsins(scope).filter(function(asin){return !getImg(asin);});}
+function _imageTargetExists(asin){return _allImageTargetAsins('all').indexOf((asin||'').toUpperCase())>=0;}
+function _imageTargetItem(asin){
+  asin=(asin||'').trim().toUpperCase();
+  if(typeof RETIRED!=='undefined'&&RETIRED&&RETIRED[asin])return RETIRED[asin];
+  for(var i=0;i<(UNASSIGNED||[]).length;i++){if(UNASSIGNED[i]&&UNASSIGNED[i].asin===asin)return UNASSIGNED[i];}
+  var loc=findItem(asin);
+  if(loc.cat&&DATA[loc.cat]&&DATA[loc.cat][loc.sub])return DATA[loc.cat][loc.sub][loc.idx];
+  return null;
+}
+function _loadImgRetryState(){
+  if(_IMG_RETRY_STATE)return _IMG_RETRY_STATE;
+  try{_IMG_RETRY_STATE=JSON.parse(localStorage.getItem(_imgRetryKey())||'{}')||{};}catch(e){_IMG_RETRY_STATE={};}
+  Object.keys(_IMG_RETRY_STATE).forEach(function(asin){if(getImg(asin)||!_imageTargetExists(asin))delete _IMG_RETRY_STATE[asin];});
+  return _IMG_RETRY_STATE;
+}
+function _saveImgRetryState(){try{localStorage.setItem(_imgRetryKey(),JSON.stringify(_IMG_RETRY_STATE||{}));}catch(e){}}
+function _imgRetryDelayMs(attempts){
+  var mins=[10,30,120,360,1440,1440];
+  return mins[Math.min(Math.max((attempts||1)-1,0),mins.length-1)]*60*1000;
+}
+function getImageRetryCount(){return Object.keys(_loadImgRetryState()).length;}
+function _clearImageRetry(asin){
+  asin=(asin||'').trim().toUpperCase();
+  var s=_loadImgRetryState();
+  if(s[asin]){delete s[asin];_saveImgRetryState();}
+}
+function _scheduleImageRetry(asin,reason){
+  asin=(asin||'').trim().toUpperCase();
+  if(!/^[A-Z0-9]{10,12}$/.test(asin)||getImg(asin)||!_imageTargetExists(asin)){_clearImageRetry(asin);return;}
+  var s=_loadImgRetryState(),prev=s[asin]||{},attempts=(prev.attempts||0)+1,now=Date.now();
+  s[asin]={asin:asin,attempts:attempts,lastFailAt:now,nextAt:now+_imgRetryDelayMs(attempts),reason:reason||'未抓到图片'};
+  _saveImgRetryState();
+  if(typeof updateBatchImgBadge==='function')updateBatchImgBadge();
+  if(typeof startImageRetryWorker==='function')startImageRetryWorker();
+}
+function _clearAmazonImgCache(asin){
+  asin=(asin||'').trim().toUpperCase();
+  try{delete _AMZ_PAGE_CACHE[asin];delete _AMZ_PAGE_CACHE[asin+'::product'];delete _AMZ_PAGE_CACHE[asin+'::offer'];}catch(e){}
+}
+function fetchAmazonImgRetry(asin,attempt){
+  asin=(asin||'').trim().toUpperCase();
+  attempt=attempt||0;
+  _clearAmazonImgCache(asin);
+  return fetchAmazonImg(asin).then(function(url){
+    if(url)return url;
+    if(attempt>=1&&typeof fetchAmazonRating==='function'){
+      return fetchAmazonRating(asin).then(function(res){return res&&res.img?res.img:null;}).catch(function(){return null;});
+    }
+    return null;
+  }).then(function(url){
+    if(url)return url;
+    if(attempt>=2&&typeof _scrapeAmazonImg==='function')return _scrapeAmazonImg(asin,false).catch(function(){return null;});
+    return null;
+  });
+}
+function _dueImageRetryAsins(limit){
+  var s=_loadImgRetryState(),now=Date.now(),out=[];
+  Object.keys(s).forEach(function(asin){
+    if(getImg(asin)||!_imageTargetExists(asin)){delete s[asin];return;}
+    if((s[asin].nextAt||0)<=now)out.push(asin);
+  });
+  _saveImgRetryState();
+  return out.slice(0,limit||3);
+}
+function _runImageRetryTick(){
+  if(_IMG_RETRY_RUNNING||(_batchJob&&!_batchJob.done))return;
+  var due=_dueImageRetryAsins(3);
+  if(!due.length)return;
+  _IMG_RETRY_RUNNING=true;
+  var i=0,ok=0;
+  function next(){
+    if(i>=due.length){
+      _IMG_RETRY_RUNNING=false;
+      if(ok){markDirty();save();if(typeof scheduleImgFlush==='function')scheduleImgFlush();if(typeof updateBatchImgBadge==='function')updateBatchImgBadge();}
+      return;
+    }
+    var asin=due[i++],entry=_loadImgRetryState()[asin]||{};
+    fetchAmazonImgRetry(asin,entry.attempts||0).then(function(url){
+      if(url){storeFetchedImage(asin,url,_imageTargetItem(asin));ok++;}
+      else{_scheduleImageRetry(asin,'后台重试仍未抓到图片');}
+      setTimeout(next,5000);
+    }).catch(function(){_scheduleImageRetry(asin,'后台重试请求失败');setTimeout(next,5000);});
+  }
+  next();
+}
+function startImageRetryWorker(){
+  if(_IMG_RETRY_TIMER)return;
+  _loadImgRetryState();
+  _IMG_RETRY_TIMER=setInterval(_runImageRetryTick,60*1000);
+  setTimeout(_runImageRetryTick,8000);
+}
+setTimeout(startImageRetryWorker,12000);
 
 // Count products missing images & update the batch button badge
 function updateBatchImgBadge(){
-  if(!DATA)return;
-  var missing=0;
-  Object.keys(DATA).forEach(function(c){Object.keys(DATA[c]).forEach(function(s){
-    DATA[c][s].forEach(function(it){if(!getImg(it.asin))missing++;});
-  });});
+  var missing=(typeof _missingImageAsins==='function')?_missingImageAsins('all').length:0;
+  var retry=(typeof getImageRetryCount==='function')?getImageRetryCount():0;
   var el=document.getElementById('batch-img-cnt');
   if(!el)return;
-  if(missing>0){el.textContent=missing;el.style.display='inline-block';}
+  if(missing>0){el.textContent=retry?(missing+' / 重试'+retry):missing;el.style.display='inline-block';}
   else{el.style.display='none';}
 }
 function getImageHealth(){
-  var productAsins={},missing=[],total=0;
-  Object.keys(DATA||{}).forEach(function(c){Object.keys(DATA[c]||{}).forEach(function(s){
-    (DATA[c][s]||[]).forEach(function(it){if(!it||!it.asin)return;total++;productAsins[it.asin]=1;if(!getImg(it.asin))missing.push(it.asin);});
-  });});
-  (UNASSIGNED||[]).forEach(function(it){if(it&&it.asin){productAsins[it.asin]=1;if(!(it.img||getImg(it.asin)))missing.push(it.asin);}});
-  Object.keys(RETIRED||{}).forEach(function(asin){productAsins[asin]=1;});
+  var productAsins={},missing=[],targets=(typeof _allImageTargetAsins==='function')?_allImageTargetAsins('all'):[],total=targets.length;
+  targets.forEach(function(asin){productAsins[asin]=1;if(!getImg(asin))missing.push(asin);});
   var cacheKeys=Object.keys(IMGS||{}),orphan=[],bytes=0;
   cacheKeys.forEach(function(a){
     var v=IMGS[a]||'';
     bytes+=String(v).length;
     if(!productAsins[a])orphan.push(a);
   });
-  return {total:total,missing:missing,cache:cacheKeys.length,orphan:orphan,bytes:bytes};
+  return {total:total,missing:missing,cache:cacheKeys.length,orphan:orphan,bytes:bytes,retry:getImageRetryCount()};
 }
 function _fmtBytes(n){
   if(!n)return '0 KB';
@@ -2066,7 +2170,7 @@ function _fmtBytes(n){
 function showImageHealth(silent){
   var h=getImageHealth();
   var el=q('img-health-summary');
-  var msg='产品 '+h.total+' 个 · 缺图 '+h.missing.length+' 个 · 图片缓存 '+h.cache+' 张 · 约 '+_fmtBytes(h.bytes)+' · 可清理 '+h.orphan.length+' 张';
+  var msg='产品 '+h.total+' 个 · 缺图 '+h.missing.length+' 个 · 待重试 '+(h.retry||0)+' 个 · 图片缓存 '+h.cache+' 张 · 约 '+_fmtBytes(h.bytes)+' · 可清理 '+h.orphan.length+' 张';
   if(el)el.textContent=msg;
   if(!silent)toast(msg);
 }
@@ -2094,7 +2198,7 @@ function autoFetchImg(){
   var btn=event.target;
   var origText=btn.textContent;
   btn.disabled=true;btn.textContent='抓取中…';
-  fetchAmazonImg(asin).then(function(url){
+  fetchAmazonImgRetry(asin,0).then(function(url){
     btn.disabled=false;btn.textContent=origText;
     if(url){
       pendImg=url;
@@ -2102,9 +2206,10 @@ function autoFetchImg(){
       q('md-img-ph').style.display='none';
       toast('✓ 已抓取主图（URL 形式）');
     } else {
-      toast('⚠ 未找到 '+asin+' 的图片（已尝试 5 个地区 + 5 个代理）');console.log('[fetchImg] '+asin+' failed. Run window.__DEBUG_FETCH_IMG__=true and retry to see attempts.');
+      _scheduleImageRetry(asin,'编辑弹窗抓图未抓到图片');
+      toast('⚠ 未找到 '+asin+' 的图片，已加入后台重试');console.log('[fetchImg] '+asin+' queued for retry. Run window.__DEBUG_FETCH_IMG__=true and retry to see attempts.');
     }
-  });
+  }).catch(function(){_scheduleImageRetry(asin,'编辑弹窗抓图请求失败');toast('⚠ 抓图请求失败，已加入后台重试');});
 }
 
 // Batch auto-fetch for all products missing images
@@ -2200,7 +2305,7 @@ function batchAutoFetchImgs(scope){
     var widget=document.getElementById('bg-job-imgs');if(!widget)return;
     widget.classList.add('done');
     var t=widget.querySelector('.bg-job-title');
-    if(t)t.textContent=j.cancelled?'已停止 · 成功 '+j.ok:'抓图完成 · '+j.ok+'/'+j.total;
+    if(t)t.textContent=j.cancelled?'已停止 · 成功 '+j.ok:('抓图完成 · '+j.ok+'/'+j.total+(j.fail?' · '+j.fail+' 个已排队重试':''));
     var cb=document.getElementById('bg-job-cancel');
     if(cb){cb.textContent='✓';cb.onclick=function(){widget.remove();};}
     _batchJob.done=true;
@@ -2223,13 +2328,15 @@ function batchAutoFetchImgs(scope){
       var asin=targets[cursor++];
       active++;
       (function(a){
-        fetchAmazonImg(a).then(function(url){
+        fetchAmazonImgRetry(a,0).then(function(url){
           if(_batchJob.cancelled){active--;pump();return;}
           if(url){
-            var targetItem=(typeof RETIRED!=='undefined'&&RETIRED&&RETIRED[a])?RETIRED[a]:null;
-            storeFetchedImage(a,url,targetItem);
+            storeFetchedImage(a,url,_imageTargetItem(a));
             _batchJob.ok++;
-          }else{_batchJob.fail++;}
+          }else{
+            _batchJob.fail++;
+            _scheduleImageRetry(a,'批量抓图本轮未抓到图片');
+          }
           _batchJob.done++;
           active--;
           updateUI();
@@ -2238,7 +2345,7 @@ function batchAutoFetchImgs(scope){
           pump();
         }).catch(function(){
           if(_batchJob.cancelled){active--;pump();return;}
-          _batchJob.fail++;_batchJob.done++;active--;updateUI();pump();
+          _batchJob.fail++;_scheduleImageRetry(a,'批量抓图请求失败');_batchJob.done++;active--;updateUI();pump();
         });
       })(asin);
     }
@@ -3167,9 +3274,11 @@ function storeFetchedImage(asin,url,item){
   if(typeof IMGS!=='undefined')IMGS[asin]=url;
   if(item)item.img=url;
   if(typeof RETIRED!=='undefined'&&RETIRED&&RETIRED[asin])RETIRED[asin].img=url;
+  if(typeof _clearImageRetry==='function')_clearImageRetry(asin);
   _applyImageToVisibleCards(asin,url);
   markDirty();
   if(typeof scheduleImgFlush==='function')scheduleImgFlush();
+  if(typeof updateBatchImgBadge==='function')updateBatchImgBadge();
   return true;
 }
 
@@ -6527,9 +6636,10 @@ function inboxFetchOne(asin){
       markDirty();save();renderInbox();
       toast('✓ '+asin+' 主图已抓取');
     } else {
-      toast('✗ '+asin+' 没抓到图片');
+      _scheduleImageRetry(asin,'单个抓图未抓到图片');
+      toast('✗ '+asin+' 没抓到图片，已加入后台重试');
     }
-  }).catch(function(){toast('✗ '+asin+' 抓图出错');});
+  }).catch(function(){_scheduleImageRetry(asin,'单个抓图请求失败');toast('✗ '+asin+' 抓图出错，已加入后台重试');});
 }
 
 function fetchInboxImage(p){
@@ -6537,7 +6647,7 @@ function fetchInboxImage(p){
   var changed=false;
   var asin=p.asin;
   if(p.img||getImg(asin))return Promise.resolve(false);
-  return fetchAmazonImg(asin).then(function(url){
+  return fetchAmazonImgRetry(asin,0).then(function(url){
     if(url){
       storeFetchedImage(asin,url,p);
       changed=true;
@@ -6553,7 +6663,11 @@ function fetchInboxImage(p){
     });
   }).then(function(ok){
     if(ok&&typeof scheduleImgFlush==='function')scheduleImgFlush();
+    if(!ok)_scheduleImageRetry(asin,'待分配抓图未抓到图片');
     return ok;
+  }).catch(function(e){
+    _scheduleImageRetry(asin,'待分配抓图请求失败');
+    return false;
   });
 }
 
@@ -7229,10 +7343,19 @@ function exportPromoAmazonCsv(promoId){
 // 更新日志 (Changelog)
 // 每次发新版，在 CHANGELOG 数组最前面加一条即可。
 // ════════════════════════════════════════════════════════════════
-var APP_VERSION='3.5.25';
+var APP_VERSION='3.5.26';
 // 标题栏自动显示当前版本号（跟随 APP_VERSION，不用手动改）
 try{ document.title = 'Tangzon 产品管理 v' + APP_VERSION; }catch(e){}
 var CHANGELOG=[
+  {
+    v:'3.5.26', date:'2026-06-28',
+    notes:[
+      '新增：缺图 ASIN 会自动进入后台重试队列，失败后按 10 分钟、30 分钟、2 小时、6 小时、24 小时逐步退避后继续尝试',
+      '优化：后台重试会清理 Amazon 页面缓存，并依次尝试 CDN、商品页、详情解析、代理页面等备用路径',
+      '优化：图片体检和抓图角标现在统计产品库、淘汰区、待分配区，并显示待重试数量',
+      '说明：单个 ASIN 抓图失败不会中断整批任务；软件打开期间会持续补抓，直到抓到图片或该产品被删除'
+    ]
+  },
   {
     v:'3.5.25', date:'2026-06-26',
     notes:[
