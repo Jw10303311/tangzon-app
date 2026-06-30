@@ -658,10 +658,7 @@ ipcMain.handle('send-notification', (event, { title, body }) => {
 });
 ipcMain.handle('show-window', () => showMainWindow());
 ipcMain.handle('quit-app', () => { isQuitting = true; app.quit(); });
-ipcMain.handle('read-file', (event, filePath) => {
-  try { return { ok: true, content: fs.readFileSync(filePath, 'utf-8'), path: filePath }; }
-  catch (e) { return { ok: false, error: e.message }; }
-});
+
 ipcMain.handle('save-backup-json', (event, payload) => {
   try {
     const dir = ensureBackupDir();
@@ -693,7 +690,10 @@ ipcMain.handle('read-backup-json', (event, filePath) => {
   try {
     const dir = path.resolve(ensureBackupDir());
     const p = path.resolve(String(filePath || ''));
-    if (!p.startsWith(dir)) return { ok: false, error: 'Invalid backup path' };
+    const rel = path.relative(dir, p);
+    if (!rel || rel.startsWith('..') || path.isAbsolute(rel)) return { ok: false, error: 'Invalid backup path' };
+    const st = fs.statSync(p);
+    if (!st.isFile()) return { ok: false, error: 'Invalid backup path' };
     return { ok: true, content: fs.readFileSync(p, 'utf-8'), path: p };
   } catch (e) {
     return { ok: false, error: e.message };

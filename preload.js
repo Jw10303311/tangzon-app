@@ -22,7 +22,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   sendNotification: (title, body) => ipcRenderer.invoke('send-notification', { title, body }),
   showWindow: () => ipcRenderer.invoke('show-window'),
   quitApp: () => ipcRenderer.invoke('quit-app'),
-  readFile: (filePath) => ipcRenderer.invoke('read-file', filePath),
   openExternal: (url) => ipcRenderer.invoke('open-external', url),
   checkUpdates: () => ipcRenderer.invoke('check-updates'),
   checkHotUpdates: () => ipcRenderer.invoke('check-hot-updates'),

@@ -4835,6 +4835,11 @@ function buildBackupBundle(kind){
     RATING_LOG:RATING_LOG
   };
 }
+function hasAnyBackupData(){
+  function hasObj(o){return !!(o&&typeof o==='object'&&Object.keys(o).length);}
+  function hasArr(a){return Array.isArray(a)&&a.length>0;}
+  return hasObj(DATA)||hasObj(RETIRED)||hasArr(UNASSIGNED)||hasObj(PROMOTIONS)||hasObj(REVIEW_HIST)||hasObj(SALES_BASE)||hasObj(SALES_CMP)||hasObj(PROD_SALES)||hasObj(STARRED)||hasArr(HIST)||(typeof RATING_LOG!=='undefined'&&hasArr(RATING_LOG));
+}
 function saveBackupFile(kind,silent){
   if(!window.electronAPI||!window.electronAPI.saveBackupJson){
     if(!silent)exportJson();
@@ -4858,7 +4863,7 @@ function createRestorePoint(reason){
 }
 function runDailyAutoBackup(){
   if(!window.electronAPI||!window.electronAPI.saveBackupJson)return;
-  if(!DATA||!Object.keys(DATA).length)return;
+  if(!hasAnyBackupData())return;
   var today=new Date().toISOString().slice(0,10);
   if(localStorage.getItem('tz3_last_auto_backup_day')===today)return;
   saveBackupFile('auto',true).then(function(res){if(res&&res.ok)toast('✓ 今日自动备份已完成');});
@@ -4902,7 +4907,7 @@ function checkBackupReminder(){
   var now=Date.now(),DAY=86400000;
   if(now<snooze)return;
   // First-run grace: if no data & no last export, skip
-  if(!last && !Object.keys(DATA||{}).length)return;
+  if(!last && !hasAnyBackupData())return;
   var threshold=7*DAY;
   if(!last || (now-last)>threshold){
     var days=last?Math.floor((now-last)/DAY):null;
