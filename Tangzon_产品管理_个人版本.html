@@ -7836,6 +7836,8 @@ function checkHotUpdateNow(){
   window.electronAPI.checkHotUpdates().then(function(res){
     if(!res){toast('未收到小更新结果');return;}
     if(res.ok&&res.applied){toast('小更新已完成');return;}
+    if(res.ok&&res.skipped){toast('已取消下载此小更新版本');return;}
+    if(res.ok&&res.updateAvailable){toast('发现小更新，请手动检查下载');return;}
     if(res.ok&&res.upToDate){toast('已经是最新小更新');return;}
     if(res.ok&&res.incompatible){toast('当前小更新不适用于此版本');return;}
     toast('小更新失败：'+(res.error||res.message||'未知原因'));

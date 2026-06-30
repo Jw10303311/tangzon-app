@@ -234,6 +234,26 @@ async function checkHotUpdate(silent = false) {
     if (local && local.version && remote.version && local.version === remote.version && fs.existsSync(getHotHtmlPath())) {
       return { ok: true, upToDate: true, version: local.version };
     }
+    if (isHotUpdateSkipped(cfg, appVersion, remote.version) && silent) {
+      return { ok: true, skipped: true, version: remote.version, message: 'hot_update_skipped' };
+    }
+    if (mainWindow) {
+      const ans = await dialog.showMessageBox(mainWindow, {
+        type: 'question',
+        buttons: ['取消本版本', '立即下载'],
+        defaultId: 1,
+        cancelId: 0,
+        title: '发现小更新',
+        message: `发现小更新 v${remote.version}`,
+        detail: '小更新只替换界面文件，不会清空产品数据。选择取消后，自动检查不会再下载这个小更新版本；你仍可手动检查更新。'
+      });
+      if (ans.response !== 1) {
+        setSkippedHotUpdate(appVersion, remote.version);
+        return { ok: true, skipped: true, version: remote.version, message: 'hot_update_skipped' };
+      }
+    } else if (silent) {
+      return { ok: true, updateAvailable: true, version: remote.version, message: 'hot_update_available' };
+    }
 
     const htmlFile = pickHotHtmlFile(remote);
     if (!remote.version || !htmlFile || !htmlFile.url || !htmlFile.sha256) {
@@ -267,6 +287,7 @@ async function checkHotUpdate(silent = false) {
       installedAt: new Date().toISOString()
     };
     saveHotManifest(installed);
+    clearSkippedHotUpdate(appVersion, remote.version);
 
     if (silent) {
       if (Notification.isSupported()) {
@@ -428,6 +449,39 @@ function getSettings() {
   };
 }
 function saveSettings(updates) { const cfg = loadConfig(); Object.assign(cfg, updates); saveConfig(cfg); }
+function hotUpdateSkipKey(appVersion, hotVersion) {
+  return String(appVersion || '') + '|' + String(hotVersion || '');
+}
+function isHotUpdateSkipped(cfg, appVersion, hotVersion) {
+  const key = hotUpdateSkipKey(appVersion, hotVersion);
+  return cfg && (cfg.skippedHotUpdateKey === key || (!cfg.skippedHotUpdateKey && cfg.skippedHotUpdateVersion === hotVersion));
+}
+function setSkippedHotUpdate(appVersion, hotVersion) {
+  const cfg = loadConfig();
+  cfg.skippedHotUpdateKey = hotUpdateSkipKey(appVersion, hotVersion);
+  cfg.skippedHotUpdateVersion = hotVersion || '';
+  saveConfig(cfg);
+}
+function clearSkippedHotUpdate(appVersion, hotVersion) {
+  const cfg = loadConfig();
+  if (isHotUpdateSkipped(cfg, appVersion, hotVersion)) {
+    delete cfg.skippedHotUpdateKey;
+    delete cfg.skippedHotUpdateVersion;
+    saveConfig(cfg);
+  }
+}
+function setSkippedFullUpdate(version) {
+  const cfg = loadConfig();
+  cfg.skippedFullUpdateVersion = version || '';
+  saveConfig(cfg);
+}
+function clearSkippedFullUpdate(version) {
+  const cfg = loadConfig();
+  if (cfg.skippedFullUpdateVersion && cfg.skippedFullUpdateVersion === version) {
+    delete cfg.skippedFullUpdateVersion;
+    saveConfig(cfg);
+  }
+}
 
 // ── 主窗口 ───────────────────────────────────────────────────
 function createWindow(showImmediately = true) {
@@ -723,16 +777,20 @@ function setupAutoUpdater() {
 
   autoUpdater.on('update-available', (info) => {
     if (!mainWindow) return;
+    const version = info && info.version ? String(info.version) : '';
+    const cfg = loadConfig();
+    if (!_manualUpdateCheck && version && cfg.skippedFullUpdateVersion === version) return;
     dialog.showMessageBox(mainWindow, {
       type: 'info',
       title: '发现新版本',
-      message: '有新版本 v' + info.version + ' 可用',
-      detail: '是否现在下载更新？下载完成后会提示你重启安装。',
+      message: '有新版本 v' + version + ' 可用',
+      detail: '是否现在下载更新？选择稍后后，自动检查不会再反复提示这个版本；你仍可手动检查更新。',
       buttons: ['稍后再说', '立即下载'],
       defaultId: 1,
       cancelId: 0
     }).then((res) => {
       if (res.response === 1) {
+        clearSkippedFullUpdate(version);
         autoUpdater.downloadUpdate();
         if (mainWindow) {
           new Notification({
@@ -741,7 +799,10 @@ function setupAutoUpdater() {
             icon: path.join(__dirname, 'icon.png')
           }).show();
         }
+      } else if (version) {
+        setSkippedFullUpdate(version);
       }
+      _manualUpdateCheck = false;
     });
   });
 
