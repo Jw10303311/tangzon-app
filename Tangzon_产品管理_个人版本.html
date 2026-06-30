@@ -550,7 +550,7 @@ body.dark .cpal{background:rgba(0,0,0,.7);}
           <button class="exp-mi" onclick="exportJson()">导出完整备份 (JSON)</button>
           <button class="exp-mi" onclick="openExportJsonCategories()">按类目导出 JSON</button>
           <button class="exp-mi" onclick="exportInboxJson()">导出待分配 JSON</button>
-          <label class="exp-mi" style="cursor:pointer">导入待分配 JSON<input type="file" accept=".json" style="display:none" onchange="handleInboxJsonImportFile(this);q('exp-menu').classList.remove('on')"></label>
+          <label class="exp-mi" style="cursor:pointer">导入 JSON 到待分配区<input type="file" accept=".json" style="display:none" onchange="handleInboxJsonImportFile(this);q('exp-menu').classList.remove('on')"></label>
           <button class="exp-mi" id="export-sub-menu-item" onclick="exportCurrentSub()" style="display:none">导出当前小类</button>
           <button class="exp-mi" onclick="downloadTemplate()">下载导入模板</button>
           <div style="height:1px;background:var(--bor);margin:4px 0"></div>
@@ -610,6 +610,7 @@ body.dark .cpal{background:rgba(0,0,0,.7);}
       <div id="sel-bar" style="display:none;align-items:center;gap:10px;padding:8px 12px;background:rgba(35,85,212,.07);border-radius:6px;margin-bottom:8px;border:1px solid rgba(35,85,212,.18)">
         <span style="font-size:11px;color:var(--blue);font-weight:600" id="sel-bar-count">已选 0 个</span>
         <button class="btn-c" onclick="openBulkSubtype()" style="font-size:10px;color:var(--accent);border-color:var(--accent-bor)">设置细分类型</button>
+        <button class="btn-c" onclick="openBulkMoveSub()" style="font-size:10px;color:var(--blue);border-color:rgba(35,85,212,.28)">批量修改小类目</button>
         <button class="btn-c" onclick="retireSelected()" style="font-size:10px;color:var(--red);border-color:#fca5a5">批量淘汰</button>
         <button class="btn-c" onclick="clearSelection()" style="font-size:10px">取消</button>
       </div>
@@ -703,6 +704,8 @@ body.dark .cpal{background:rgba(0,0,0,.7);}
 <div class="mo" id="mo-prod"><div class="md md-wide"><button class="md-x" onclick="closeMo('mo-prod')">✕</button><div class="md-title" id="md-prod-title">添加产品</div><div class="md-sub" id="md-prod-sub"></div><div class="fr"><div class="fg"><label class="fl">ASIN *</label><input class="fi" id="inp-asin" placeholder="B0XXXXXXXX" maxlength="12" oninput="this.value=this.value.toUpperCase()"></div><div class="fg"><label class="fl">老货号 (SKU)</label><input class="fi" id="inp-sku"></div></div><div class="fr"><div class="fg"><label class="fl">新货号 (可选)</label><input class="fi" id="inp-new-sku" placeholder="新SKU / 换款货号"></div><div class="fg"></div></div><div class="fr"><div class="fg"><label class="fl">所属大类</label><select class="fsel" id="inp-prod-cat" onchange="syncSubSel('inp-prod-cat','inp-prod-subcat')"></select></div><div class="fg"><label class="fl">所属小类</label><select class="fsel" id="inp-prod-subcat"></select></div></div><div class="fr"><div class="fg"><label class="fl">价格(£)</label><input class="fi" id="inp-price" type="number" min="0" step="0.01"></div><div class="fg"><label class="fl">星级</label><input class="fi" id="inp-star" type="number" min="1" max="5" step="0.1"></div></div><div class="fr"><div class="fg"><label class="fl">评论数</label><input class="fi" id="inp-ratings" type="number" min="0"></div><div class="fg"><label class="fl">销量(£)</label><input class="fi" id="inp-sales" type="number" min="0"></div></div><div class="fg"><label class="fl">产品图片（可选）</label><div class="img-row"><div class="img-pre"><img loading="lazy" id="md-img-pre" src="" style="display:none"><span id="md-img-ph" style="font-size:18px;color:#c5d0de">📦</span></div><div><label class="img-uplbtn" for="inp-img">上传图片</label><input type="file" id="inp-img" accept="image/*" style="display:none" onchange="previewImg(this)"><button type="button" class="img-uplbtn" style="margin-left:6px;border-color:var(--accent-bor);color:var(--accent)" onclick="autoFetchImg()" title="根据 ASIN 自动从 Amazon UK 抓取主图">🪄 自动抓图</button></div></div></div><div class="fg"><label class="fl">竞品 ASIN（可多个，逗号分隔）</label><input class="fi" id="inp-comp-asins" placeholder="B0XXXXXXXX, B0YYYYYYYY" style="font-size:11px"></div><input type="hidden" id="inp-prod-eid"><input type="hidden" id="inp-prod-ecat"><input type="hidden" id="inp-prod-esub"><div class="fa"><button class="btn-c" onclick="closeMo('mo-prod')">取消</button><button class="btn-ok" id="prod-ok-btn" onclick="confirmProd()">确认添加</button></div></div></div>
 
 <div class="mo" id="mo-move"><div class="md"><button class="md-x" onclick="closeMo('mo-move')">✕</button><div class="md-title">移动产品</div><div class="md-sub" id="move-sub-lbl"></div><div class="fg"><label class="fl">目标大类</label><select class="fsel" id="move-cat" onchange="syncMoveSubSel()"></select></div><div class="fg"><label class="fl">目标小类</label><select class="fsel" id="move-subcat"></select></div><input type="hidden" id="move-asin"><input type="hidden" id="move-fcat"><input type="hidden" id="move-fsub"><div class="fa"><button class="btn-c" onclick="closeMo('mo-move')">取消</button><button class="btn-ok" onclick="confirmMove()">确认移动</button></div></div></div>
+
+<div class="mo" id="mo-bulk-move-sub"><div class="md"><button class="md-x" onclick="closeMo('mo-bulk-move-sub')">✕</button><div class="md-title">批量修改小类目</div><div class="md-sub" id="bulk-move-sub-lbl"></div><div class="fg"><label class="fl">目标大类</label><select class="fsel" id="bulk-move-cat" onchange="syncBulkMoveSubSel()"></select></div><div class="fg"><label class="fl">目标小类</label><select class="fsel" id="bulk-move-subcat"></select></div><div class="fa"><button class="btn-c" onclick="closeMo('mo-bulk-move-sub')">取消</button><button class="btn-ok" onclick="confirmBulkMoveSub()">确认修改</button></div></div></div>
 
 <!-- Create / Edit Promotion Modal -->
 <div class="mo" id="mo-promo"><div class="md md-wide">
@@ -4216,6 +4219,46 @@ function openMoveProd(asin){var loc=findItem(asin);if(!loc.cat)return;q('move-su
 function syncMoveSubSel(){fillSubSel('move-subcat',q('move-cat').value,null);}
 function confirmMove(){var asin=q('move-asin').value,fc=q('move-fcat').value,fs=q('move-fsub').value,tc=q('move-cat').value,ts=q('move-subcat').value;if(!tc||!ts){toast('请选择目标类目');return;}var idx=DATA[fc][fs].findIndex(function(it){return it.asin===asin;});if(idx<0){closeMo('mo-move');return;}var item=DATA[fc][fs].splice(idx,1)[0];item.subcat=ts;if(!DATA[tc])DATA[tc]={};if(!DATA[tc][ts])DATA[tc][ts]=[];snapshotForUndo();DATA[tc][ts].push(item);closeMo('mo-move');markDirty();buildSidebar();renderGrid();updateStats();toast('✓ 已移动至 '+tc+' › '+ts);}
 
+function openBulkMoveSub(){
+  if(!_selAsins.size){toast('请先勾选产品');return;}
+  var asins=Array.from(_selAsins),firstLoc=null,valid=0;
+  asins.forEach(function(asin){var loc=findItem(asin);if(loc.cat){valid++;if(!firstLoc)firstLoc=loc;}});
+  if(!valid||!firstLoc){toast('未找到所选产品');return;}
+  q('bulk-move-sub-lbl').textContent='将所选 '+valid+' 个产品移动到目标小类';
+  fillCatSel('bulk-move-cat',firstLoc.cat);
+  fillSubSel('bulk-move-subcat',firstLoc.cat,firstLoc.sub);
+  openMo('mo-bulk-move-sub');
+}
+function syncBulkMoveSubSel(){fillSubSel('bulk-move-subcat',q('bulk-move-cat').value,null);}
+function confirmBulkMoveSub(){
+  var tc=q('bulk-move-cat').value,ts=q('bulk-move-subcat').value;
+  if(!tc||!ts){toast('请选择目标类目');return;}
+  if(!DATA[tc])DATA[tc]={};
+  if(!DATA[tc][ts])DATA[tc][ts]=[];
+  var asins=Array.from(_selAsins),moved=0,missing=0;
+  createRestorePoint('before-bulk-move-sub');
+  snapshotForUndo();
+  asins.forEach(function(asin){
+    var loc=findItem(asin);
+    if(!loc.cat){missing++;return;}
+    if(loc.cat===tc&&loc.sub===ts)return;
+    var from=(DATA[loc.cat]&&DATA[loc.cat][loc.sub])||[];
+    var idx=from.findIndex(function(it){return it&&it.asin===asin;});
+    if(idx<0){missing++;return;}
+    var item=from.splice(idx,1)[0];
+    item.subcat=ts;
+    DATA[tc][ts].push(item);
+    moved++;
+  });
+  pruneEmpty();
+  _selAsins.clear();
+  var sb=q('sel-bar');if(sb)sb.style.display='none';
+  var sc=q('sel-bar-count');if(sc)sc.textContent='已选 0 个';
+  closeMo('mo-bulk-move-sub');
+  markDirty();save();buildSidebar();renderGrid();updateStats();
+  if(typeof buildSubtypeBar==='function')buildSubtypeBar();
+  toast(moved?'✓ 已移动 '+moved+' 个产品到 '+tc+' › '+ts:'所选产品已经在目标小类'+(missing?'，跳过 '+missing+' 个无效产品':''));
+}
 // CAT MANAGEMENT ──────────────────────────────────────────────────
 function openAddCat(){
   q('md-cat-title').textContent='新建大类目';
@@ -4743,8 +4786,16 @@ function handleInboxJsonImportFile(input){
 function importInboxJson(text,fileName){
   try{
     var d=JSON.parse(text);
-    if(!_isInboxJsonBundle(d)){toast('这不是待分配 JSON 文件');return;}
-    if(confirm('从文件「'+(fileName||'JSON')+'」导入待分配数据？\n\n只会合并到待分配区，不会覆盖产品库。'))_applyInboxJsonImport(d);
+    var isInboxBundle=_isInboxJsonBundle(d);
+    var src=isInboxBundle?null:_jsonProductData(d);
+    var cats=isInboxBundle?[]:_validJsonCats(src);
+    if(!isInboxBundle&&!cats.length){toast('JSON 中没有可导入到待分配区的产品');return;}
+    var msg=isInboxBundle
+      ?'只会合并到待分配区，不会覆盖产品库。'
+      :'会从 JSON 产品库里读取 SKU + ASIN，只导入到待分配区，不会覆盖产品库。';
+    if(!confirm('从文件「'+(fileName||'JSON')+'」导入到待分配区？\n\n'+msg))return;
+    if(isInboxBundle)_applyInboxJsonImport(d);
+    else _importToInbox(text,'json');
   }catch(e){toast('待分配 JSON 解析失败: '+e.message);}
 }
 function _applyInboxJsonImport(d,skipRestore){
