@@ -549,6 +549,8 @@ body.dark .cpal{background:rgba(0,0,0,.7);}
           <button class="exp-mi" onclick="exportCsv()">导出为 CSV</button>
           <button class="exp-mi" onclick="exportJson()">导出完整备份 (JSON)</button>
           <button class="exp-mi" onclick="openExportJsonCategories()">按类目导出 JSON</button>
+          <button class="exp-mi" onclick="exportInboxJson()">导出待分配 JSON</button>
+          <label class="exp-mi" style="cursor:pointer">导入待分配 JSON<input type="file" accept=".json" style="display:none" onchange="handleInboxJsonImportFile(this);q('exp-menu').classList.remove('on')"></label>
           <button class="exp-mi" id="export-sub-menu-item" onclick="exportCurrentSub()" style="display:none">导出当前小类</button>
           <button class="exp-mi" onclick="downloadTemplate()">下载导入模板</button>
           <div style="height:1px;background:var(--bor);margin:4px 0"></div>
@@ -4291,7 +4293,17 @@ function handleImport(input){
   var ext=file.name.split('.').pop().toLowerCase();
   if(ext==='json'){
     var r=new FileReader();
-    r.onload=function(e){_pendingImportText=e.target.result;_pendingImportType='json';openMo('mo-import-target');};
+    r.onload=function(e){
+      var text=e.target.result;
+      try{
+        var d=JSON.parse(text);
+        if(_isInboxJsonBundle(d)){
+          if(confirm('从文件「'+file.name+'」导入待分配 JSON？\n\n只会合并到待分配区，不会覆盖产品库。'))_applyInboxJsonImport(d);
+          return;
+        }
+      }catch(err){}
+      _pendingImportText=text;_pendingImportType='json';openMo('mo-import-target');
+    };
     r.readAsText(file,'utf-8');
   }
   else if(ext==='xlsx'||ext==='xls'){
@@ -4392,6 +4404,7 @@ function _applySelectedJsonImport(d,cats){
 function importJson(text){
   try{
     var d=JSON.parse(text);
+    if(_isInboxJsonBundle(d)){_applyInboxJsonImport(d);return;}
     var src=_jsonProductData(d);
     var cats=_validJsonCats(src);
     if(!cats.length){toast('JSON 中没有可导入的产品类目');return;}
@@ -4685,6 +4698,82 @@ function clearLibrary(){
   if(typeof renderInbox==='function')renderInbox();
   if(typeof updateInboxBadge==='function')updateInboxBadge();
   toast('✓ 产品库已清空');
+}
+function _inboxJsonItems(d){
+  if(!d)return null;
+  if(Array.isArray(d))return d;
+  if(Array.isArray(d.UNASSIGNED))return d.UNASSIGNED;
+  if(Array.isArray(d.items))return d.items;
+  if(d.inbox&&Array.isArray(d.inbox.items))return d.inbox.items;
+  return null;
+}
+function _isInboxJsonBundle(d){
+  if(!d)return false;
+  if(d._partialInbox===true||d._backupKind==='inbox-json'||d._schema==='tangzon-inbox-v1')return true;
+  return !d.DATA&&!!_inboxJsonItems(d);
+}
+function _cloneInboxItem(it){
+  try{return JSON.parse(JSON.stringify(it||{}));}
+  catch(e){var out={};Object.keys(it||{}).forEach(function(k){out[k]=it[k];});return out;}
+}
+function buildInboxJsonBundle(){
+  var items=(UNASSIGNED||[]).filter(Boolean).map(_cloneInboxItem),imgs={};
+  items.forEach(function(p){
+    var asin=(p.asin||'').toUpperCase();
+    var img=p.img||(typeof IMGS!=='undefined'&&IMGS[asin]?IMGS[asin]:null);
+    if(asin&&img){imgs[asin]=img;p.img=img;}
+  });
+  return {_version:APP_VERSION,_schema:'tangzon-inbox-v1',_backupKind:'inbox-json',_partialInbox:true,_exported:new Date().toISOString(),UNASSIGNED:items,IMGS:imgs};
+}
+function exportInboxJson(){
+  q('exp-menu').classList.remove('on');
+  var count=(UNASSIGNED||[]).length;
+  if(!count){toast('待分配区是空的，暂无可导出数据');return;}
+  var bundle=buildInboxJsonBundle();
+  dl(new Blob([JSON.stringify(bundle,null,2)],{type:'application/json'}),'tangzon_inbox_'+count+'.json');
+  toast('✓ 已导出 '+count+' 个待分配产品 JSON');
+}
+function handleInboxJsonImportFile(input){
+  var file=input.files&&input.files[0];if(!file)return;
+  var r=new FileReader();
+  r.onload=function(e){importInboxJson(e.target.result,file.name);};
+  r.readAsText(file,'utf-8');
+  input.value='';
+}
+function importInboxJson(text,fileName){
+  try{
+    var d=JSON.parse(text);
+    if(!_isInboxJsonBundle(d)){toast('这不是待分配 JSON 文件');return;}
+    if(confirm('从文件「'+(fileName||'JSON')+'」导入待分配数据？\n\n只会合并到待分配区，不会覆盖产品库。'))_applyInboxJsonImport(d);
+  }catch(e){toast('待分配 JSON 解析失败: '+e.message);}
+}
+function _applyInboxJsonImport(d,skipRestore){
+  var items=_inboxJsonItems(d);
+  if(!items||!items.length){toast('待分配 JSON 中没有产品');return;}
+  if(!skipRestore)createRestorePoint('before-inbox-json-import');
+  var imgs=(d&&d.IMGS&&typeof d.IMGS==='object')?d.IMGS:{},added=0,updated=0,skipped=0;
+  items.forEach(function(raw){
+    if(!raw){skipped++;return;}
+    var asin=String(raw.asin||'').replace(/[^A-Z0-9]/gi,'').toUpperCase();
+    if(!/^[A-Z0-9]{10,12}$/.test(asin)){skipped++;return;}
+    if(findItem(asin).cat){skipped++;return;}
+    var item=_cloneInboxItem(raw);
+    item.asin=asin;
+    if(!item.sku&&item.new_sku)item.sku=item.new_sku;
+    var img=item.img||imgs[asin]||(typeof IMGS!=='undefined'?IMGS[asin]:null);
+    if(img){item.img=img;if(typeof IMGS!=='undefined')IMGS[asin]=img;}
+    if(!item._recCat&&!item._recSub){
+      var rec=_guessCategoryBySub(item._origSub||item.subcat||'');
+      if(rec){item._recCat=rec.cat;item._recSub=rec.sub;item._recScore=rec.score;}
+    }
+    var old=UNASSIGNED.find(function(p){return p&&p.asin===asin;});
+    if(old){Object.keys(item).forEach(function(k){old[k]=item[k];});updated++;}
+    else{UNASSIGNED.push(item);added++;}
+  });
+  _inboxSel=new Set(Array.from(_inboxSel||[]).filter(function(a){return UNASSIGNED.some(function(p){return p.asin===a;});}));
+  markDirty();save();renderInbox();updateInboxBadge();switchTab('inbox');
+  if(typeof scheduleImgFlush==='function')scheduleImgFlush();
+  toast('✓ 待分配 JSON 已导入：新增 '+added+' 个，更新 '+updated+' 个'+(skipped?'，跳过 '+skipped+' 个':''));
 }
 function openExportJsonCategories(){
   q('exp-menu').classList.remove('on');
@@ -7110,6 +7199,7 @@ function _importToInbox(text,type){
   if(type==='json'){
     try{
       var d=JSON.parse(text);
+      if(_isInboxJsonBundle(d)){_applyInboxJsonImport(d,true);return;}
       var src=d.DATA||d;
       Object.keys(src).forEach(function(c){
         if(typeof src[c]!=='object')return;
