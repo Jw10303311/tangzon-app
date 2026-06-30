@@ -822,6 +822,13 @@ body.dark .cpal{background:rgba(0,0,0,.7);}
       <div style="font-size:11px;color:var(--tx3);margin-top:2px">超过 7 天未备份时桌面通知 + 应用内提醒</div>
     </label>
   </div>
+  <div class="fg" style="display:flex;align-items:center;gap:10px;padding:12px;background:var(--sur2);border-radius:8px;margin-top:8px">
+    <input type="checkbox" id="set-auto-check-updates" style="width:16px;height:16px;cursor:pointer">
+    <label for="set-auto-check-updates" style="flex:1;cursor:pointer;font-size:13px">
+      <div style="font-weight:600;color:var(--tx)">启动时自动检查更新</div>
+      <div style="font-size:11px;color:var(--tx3);margin-top:2px">关闭后不会因为连不上 GitHub 反复弹窗；仍可手动检查小更新</div>
+    </label>
+  </div>
   <div class="fg" style="padding:12px;background:var(--sur2);border-radius:8px;margin-top:8px">
     <div style="font-weight:600;color:var(--tx);font-size:13px">数据保护</div>
     <div id="backup-dir-label" style="font-size:11px;color:var(--tx3);margin-top:2px;line-height:1.5">自动备份每天保存一次；导入、清空、批量淘汰前会生成恢复点。</div>
@@ -5559,6 +5566,7 @@ function _applyImgs(){
       var m=document.getElementById('set-min-tray');
       var ne=document.getElementById('set-notify-expiring');
       var nb=document.getElementById('set-notify-backup');
+      var acu=document.getElementById('set-auto-check-updates');
       var ar=document.getElementById('set-auto-rating');
       var sc=document.getElementById('set-rating-scope');
       var so=document.getElementById('set-rating-order');
@@ -5569,6 +5577,7 @@ function _applyImgs(){
       if(m)m.checked=!!s.minToTray;
       if(ne)ne.checked=!!s.notifyExpiring;
       if(nb)nb.checked=!!s.notifyBackup;
+      if(acu)acu.checked=s.autoCheckUpdates!==false;
       if(ar)ar.checked=!!s.autoRating;
       if(sc){
         var opts=['<option value="all">全部产品</option>'];
@@ -5640,6 +5649,7 @@ function _applyImgs(){
       minToTray:document.getElementById('set-min-tray').checked,
       notifyExpiring:document.getElementById('set-notify-expiring').checked,
       notifyBackup:document.getElementById('set-notify-backup').checked,
+      autoCheckUpdates:document.getElementById('set-auto-check-updates')?document.getElementById('set-auto-check-updates').checked:true,
       autoRating:document.getElementById('set-auto-rating')?document.getElementById('set-auto-rating').checked:false,
       ratingScope:document.getElementById('set-rating-scope')?document.getElementById('set-rating-scope').value:'all',
       ratingOrder:document.getElementById('set-rating-order')?document.getElementById('set-rating-order').value:'oldest',
@@ -7493,10 +7503,18 @@ function exportPromoAmazonCsv(promoId){
 // 更新日志 (Changelog)
 // 每次发新版，在 CHANGELOG 数组最前面加一条即可。
 // ════════════════════════════════════════════════════════════════
-var APP_VERSION='3.5.27';
+var APP_VERSION='3.5.28';
 // 标题栏自动显示当前版本号（跟随 APP_VERSION，不用手动改）
 try{ document.title = 'Tangzon 产品管理 v' + APP_VERSION; }catch(e){}
 var CHANGELOG=[
+  {
+    v:'3.5.28', date:'2026-06-30',
+    notes:[
+      '优化：没有 VPN 或 GitHub 暂时连不上时，启动自动检查更新不再反复弹窗',
+      '新增：设置里可关闭“启动时自动检查更新”，不影响手动检查小更新',
+      '说明：产品数据和正常使用不依赖 GitHub，更新服务器连不上只影响下载安装新版'
+    ]
+  },
   {
     v:'3.5.27', date:'2026-06-30',
     notes:[

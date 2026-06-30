@@ -435,6 +435,7 @@ const DEFAULT_SETTINGS = {
   autoStart: false,
   notifyExpiring: true,
   notifyBackup: true,
+  autoCheckUpdates: true,
   minToTray: true,
   autoRating: false,
   ratingScope: 'all',
@@ -456,6 +457,7 @@ function normalizeSettings(cfg = {}) {
     autoStart: cfg.autoStart === undefined ? DEFAULT_SETTINGS.autoStart : !!cfg.autoStart,
     notifyExpiring: cfg.notifyExpiring === undefined ? DEFAULT_SETTINGS.notifyExpiring : !!cfg.notifyExpiring,
     notifyBackup: cfg.notifyBackup === undefined ? DEFAULT_SETTINGS.notifyBackup : !!cfg.notifyBackup,
+    autoCheckUpdates: cfg.autoCheckUpdates === undefined ? DEFAULT_SETTINGS.autoCheckUpdates : !!cfg.autoCheckUpdates,
     minToTray: cfg.minToTray === undefined ? DEFAULT_SETTINGS.minToTray : !!cfg.minToTray,
     autoRating: cfg.autoRating === undefined ? DEFAULT_SETTINGS.autoRating : !!cfg.autoRating,
     ratingScope: typeof cfg.ratingScope === 'string' && cfg.ratingScope ? cfg.ratingScope : DEFAULT_SETTINGS.ratingScope,
@@ -938,10 +940,10 @@ app.whenReady().then(() => {
 
   // 自动更新：启动 8 秒后静默检查一次，之后每 4 小时检查一次
   setupAutoUpdater();
-  setTimeout(() => checkHotUpdate(true), 5000);
-  setInterval(() => checkHotUpdate(true), 2 * 60 * 60 * 1000);
-  setTimeout(() => checkForUpdates(true), 8000);
-  setInterval(() => checkForUpdates(true), 4 * 60 * 60 * 1000);
+  setTimeout(() => { if (getSettings().autoCheckUpdates) checkHotUpdate(true); }, 5000);
+  setInterval(() => { if (getSettings().autoCheckUpdates) checkHotUpdate(true); }, 2 * 60 * 60 * 1000);
+  setTimeout(() => { if (getSettings().autoCheckUpdates) checkForUpdates(true); }, 8000);
+  setInterval(() => { if (getSettings().autoCheckUpdates) checkForUpdates(true); }, 4 * 60 * 60 * 1000);
 
   setInterval(checkExpiringPromos, 24 * 60 * 60 * 1000);
 
