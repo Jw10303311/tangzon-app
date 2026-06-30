@@ -242,6 +242,7 @@ a{color:inherit;text-decoration:none;}
 .s5c{color:var(--green);}.s4c{color:#16a34a;}.s3c{color:var(--gold);}.s2c{color:var(--orange);}.s1c{color:var(--red);}
 .p-rat{font-size:11px;color:var(--tx3);}
 .p-nr{font-size:10.5px;color:var(--tx4);}
+.p-note{margin-top:6px;padding:6px 7px;border-radius:6px;background:var(--sur2);border:1px solid var(--bor-soft);font-size:10.5px;line-height:1.45;color:var(--tx2);white-space:pre-wrap;word-break:break-word;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;}
 .p-movebtn{font-size:9.5px;padding:3px 8px;border-radius:5px;border:1px solid var(--bor);background:var(--sur2);cursor:pointer;color:var(--tx2);font-family:inherit;font-weight:500;display:none;margin-top:6px;transition:all .14s var(--easing);}
 .edit-mode .p-movebtn{display:inline-block;}
 .p-movebtn:hover{border-color:var(--edit-bor);color:var(--edit);background:var(--edit-bg);}
@@ -701,7 +702,7 @@ body.dark .cpal{background:rgba(0,0,0,.7);}
 
 <div class="mo" id="mo-sub"><div class="md"><button class="md-x" onclick="closeMo('mo-sub')">✕</button><div class="md-title" id="md-sub-title">新建小类目</div><div class="fg"><label class="fl">所属大类</label><select class="fsel" id="inp-sub-parent"></select></div><div class="fg"><label class="fl">名称 *</label><input class="fi" id="inp-subname" placeholder="例：Outdoor Pizza Ovens"></div><input type="hidden" id="inp-sub-eid-parent"><input type="hidden" id="inp-sub-eid-name"><div class="fa"><button class="btn-c" onclick="closeMo('mo-sub')">取消</button><button class="btn-ok" onclick="confirmSub()">确认</button></div></div></div>
 
-<div class="mo" id="mo-prod"><div class="md md-wide"><button class="md-x" onclick="closeMo('mo-prod')">✕</button><div class="md-title" id="md-prod-title">添加产品</div><div class="md-sub" id="md-prod-sub"></div><div class="fr"><div class="fg"><label class="fl">ASIN *</label><input class="fi" id="inp-asin" placeholder="B0XXXXXXXX" maxlength="12" oninput="this.value=this.value.toUpperCase()"></div><div class="fg"><label class="fl">老货号 (SKU)</label><input class="fi" id="inp-sku"></div></div><div class="fr"><div class="fg"><label class="fl">新货号 (可选)</label><input class="fi" id="inp-new-sku" placeholder="新SKU / 换款货号"></div><div class="fg"></div></div><div class="fr"><div class="fg"><label class="fl">所属大类</label><select class="fsel" id="inp-prod-cat" onchange="syncSubSel('inp-prod-cat','inp-prod-subcat')"></select></div><div class="fg"><label class="fl">所属小类</label><select class="fsel" id="inp-prod-subcat"></select></div></div><div class="fr"><div class="fg"><label class="fl">价格(£)</label><input class="fi" id="inp-price" type="number" min="0" step="0.01"></div><div class="fg"><label class="fl">星级</label><input class="fi" id="inp-star" type="number" min="1" max="5" step="0.1"></div></div><div class="fr"><div class="fg"><label class="fl">评论数</label><input class="fi" id="inp-ratings" type="number" min="0"></div><div class="fg"><label class="fl">销量(£)</label><input class="fi" id="inp-sales" type="number" min="0"></div></div><div class="fg"><label class="fl">产品图片（可选）</label><div class="img-row"><div class="img-pre"><img loading="lazy" id="md-img-pre" src="" style="display:none"><span id="md-img-ph" style="font-size:18px;color:#c5d0de">📦</span></div><div><label class="img-uplbtn" for="inp-img">上传图片</label><input type="file" id="inp-img" accept="image/*" style="display:none" onchange="previewImg(this)"><button type="button" class="img-uplbtn" style="margin-left:6px;border-color:var(--accent-bor);color:var(--accent)" onclick="autoFetchImg()" title="根据 ASIN 自动从 Amazon UK 抓取主图">🪄 自动抓图</button></div></div></div><div class="fg"><label class="fl">竞品 ASIN（可多个，逗号分隔）</label><input class="fi" id="inp-comp-asins" placeholder="B0XXXXXXXX, B0YYYYYYYY" style="font-size:11px"></div><input type="hidden" id="inp-prod-eid"><input type="hidden" id="inp-prod-ecat"><input type="hidden" id="inp-prod-esub"><div class="fa"><button class="btn-c" onclick="closeMo('mo-prod')">取消</button><button class="btn-ok" id="prod-ok-btn" onclick="confirmProd()">确认添加</button></div></div></div>
+<div class="mo" id="mo-prod"><div class="md md-wide"><button class="md-x" onclick="closeMo('mo-prod')">✕</button><div class="md-title" id="md-prod-title">添加产品</div><div class="md-sub" id="md-prod-sub"></div><div class="fr"><div class="fg"><label class="fl">ASIN *</label><input class="fi" id="inp-asin" placeholder="B0XXXXXXXX" maxlength="12" oninput="this.value=this.value.toUpperCase()"></div><div class="fg"><label class="fl">老货号 (SKU)</label><input class="fi" id="inp-sku"></div></div><div class="fr"><div class="fg"><label class="fl">新货号 (可选)</label><input class="fi" id="inp-new-sku" placeholder="新SKU / 换款货号"></div><div class="fg"></div></div><div class="fr"><div class="fg"><label class="fl">所属大类</label><select class="fsel" id="inp-prod-cat" onchange="syncSubSel('inp-prod-cat','inp-prod-subcat')"></select></div><div class="fg"><label class="fl">所属小类</label><select class="fsel" id="inp-prod-subcat"></select></div></div><div class="fr"><div class="fg"><label class="fl">价格(£)</label><input class="fi" id="inp-price" type="number" min="0" step="0.01"></div><div class="fg"><label class="fl">星级</label><input class="fi" id="inp-star" type="number" min="1" max="5" step="0.1"></div></div><div class="fr"><div class="fg"><label class="fl">评论数</label><input class="fi" id="inp-ratings" type="number" min="0"></div><div class="fg"><label class="fl">销量(£)</label><input class="fi" id="inp-sales" type="number" min="0"></div></div><div class="fg"><label class="fl">产品图片（可选）</label><div class="img-row"><div class="img-pre"><img loading="lazy" id="md-img-pre" src="" style="display:none"><span id="md-img-ph" style="font-size:18px;color:#c5d0de">📦</span></div><div><label class="img-uplbtn" for="inp-img">上传图片</label><input type="file" id="inp-img" accept="image/*" style="display:none" onchange="previewImg(this)"><button type="button" class="img-uplbtn" style="margin-left:6px;border-color:var(--accent-bor);color:var(--accent)" onclick="autoFetchImg()" title="根据 ASIN 自动从 Amazon UK 抓取主图">🪄 自动抓图</button></div></div></div><div class="fg"><label class="fl">竞品 ASIN（可多个，逗号分隔）</label><input class="fi" id="inp-comp-asins" placeholder="B0XXXXXXXX, B0YYYYYYYY" style="font-size:11px"></div><div class="fg"><label class="fl">备注</label><textarea class="fi" id="inp-note" placeholder="型号、尺寸、配件、供应商记录等" style="font-size:11px;min-height:64px;resize:vertical;line-height:1.5"></textarea></div><input type="hidden" id="inp-prod-eid"><input type="hidden" id="inp-prod-ecat"><input type="hidden" id="inp-prod-esub"><div class="fa"><button class="btn-c" onclick="closeMo('mo-prod')">取消</button><button class="btn-ok" id="prod-ok-btn" onclick="confirmProd()">确认添加</button></div></div></div>
 
 <div class="mo" id="mo-move"><div class="md"><button class="md-x" onclick="closeMo('mo-move')">✕</button><div class="md-title">移动产品</div><div class="md-sub" id="move-sub-lbl"></div><div class="fg"><label class="fl">目标大类</label><select class="fsel" id="move-cat" onchange="syncMoveSubSel()"></select></div><div class="fg"><label class="fl">目标小类</label><select class="fsel" id="move-subcat"></select></div><input type="hidden" id="move-asin"><input type="hidden" id="move-fcat"><input type="hidden" id="move-fsub"><div class="fa"><button class="btn-c" onclick="closeMo('mo-move')">取消</button><button class="btn-ok" onclick="confirmMove()">确认移动</button></div></div></div>
 
@@ -3592,6 +3593,10 @@ function renderGrid(){
     if(prodSale>0){
       html.push('<div class="p-rat"><span>销量 <b>£'+fmtN(prodSale)+'</b></span></div>');
     }
+    if(item.note&&String(item.note).trim()){
+      var pnote=String(item.note).trim();
+      html.push('<div class="p-note" title="'+esc(pnote)+'">'+esc(pnote)+'</div>');
+    }
     if(editMode)html.push('<button class="p-movebtn" data-action="move-prod" data-asin="'+aa+'">↔ 移动分类</button>');
     // Competitor ASINs
     if(item.comp_asins&&item.comp_asins.length){
@@ -4138,8 +4143,8 @@ function copySku(el){var sku=decodeURIComponent(el.dataset.sku);cpText(sku,funct
 function fillCatSel(id,sel){var el=q(id);el.innerHTML='';Object.keys(DATA).forEach(function(c){var o=document.createElement('option');o.value=c;o.textContent=c;if(c===sel)o.selected=true;el.appendChild(o);});}
 function fillSubSel(id,cat,sel){var el=q(id);el.innerHTML='';if(DATA[cat])Object.keys(DATA[cat]).forEach(function(s){var o=document.createElement('option');o.value=s;o.textContent=s+(SUB_TRANS[s]?' ('+SUB_TRANS[s]+')':'');if(s===sel)o.selected=true;el.appendChild(o);});}
 function syncSubSel(catId,subId){fillSubSel(subId,q(catId).value,null);}
-function openAddProd(){q('inp-comp-asins').value='';q('md-prod-title').textContent='添加产品';q('md-prod-sub').textContent='';['inp-asin','inp-sku','inp-new-sku','inp-price','inp-star','inp-ratings','inp-sales'].forEach(function(id){q(id).value='';});q('md-img-pre').style.display='none';q('md-img-ph').style.display='';q('inp-img').value='';pendImg=null;q('inp-prod-eid').value='';q('inp-prod-ecat').value='';q('inp-prod-esub').value='';q('prod-ok-btn').textContent='确认添加';var dc=actMain!=='__all__'?actMain:Object.keys(DATA)[0];fillCatSel('inp-prod-cat',dc);fillSubSel('inp-prod-subcat',dc,actSub!=='__all__'?actSub:null);openMo('mo-prod');}
-function openEditProd(asin){var loc=findItem(asin);if(!loc.cat)return;var item=DATA[loc.cat][loc.sub][loc.idx];q('md-prod-title').textContent='编辑产品';q('md-prod-sub').textContent=asin;q('inp-asin').value=asin;q('inp-sku').value=item.sku||'';q('inp-new-sku').value=item.new_sku||'';q('inp-price').value=item.price||'';q('inp-star').value=item.star||'';q('inp-ratings').value=item.ratings||'';q('inp-sales').value=item.sales||'';q('inp-prod-eid').value=asin;q('inp-comp-asins').value=(item.comp_asins||[]).join(', ');q('inp-prod-ecat').value=loc.cat;q('inp-prod-esub').value=loc.sub;q('prod-ok-btn').textContent='保存修改';pendImg=item.img||getImg(asin)||null;var pre=q('md-img-pre');if(pendImg){pre.src=pendImg;pre.style.display='';q('md-img-ph').style.display='none';}else{pre.style.display='none';q('md-img-ph').style.display='';}fillCatSel('inp-prod-cat',loc.cat);fillSubSel('inp-prod-subcat',loc.cat,loc.sub);openMo('mo-prod');}
+function openAddProd(){q('inp-comp-asins').value='';q('md-prod-title').textContent='添加产品';q('md-prod-sub').textContent='';['inp-asin','inp-sku','inp-new-sku','inp-price','inp-star','inp-ratings','inp-sales','inp-note'].forEach(function(id){q(id).value='';});q('md-img-pre').style.display='none';q('md-img-ph').style.display='';q('inp-img').value='';pendImg=null;q('inp-prod-eid').value='';q('inp-prod-ecat').value='';q('inp-prod-esub').value='';q('prod-ok-btn').textContent='确认添加';var dc=actMain!=='__all__'?actMain:Object.keys(DATA)[0];fillCatSel('inp-prod-cat',dc);fillSubSel('inp-prod-subcat',dc,actSub!=='__all__'?actSub:null);openMo('mo-prod');}
+function openEditProd(asin){var loc=findItem(asin);if(!loc.cat)return;var item=DATA[loc.cat][loc.sub][loc.idx];q('md-prod-title').textContent='编辑产品';q('md-prod-sub').textContent=asin;q('inp-asin').value=asin;q('inp-sku').value=item.sku||'';q('inp-new-sku').value=item.new_sku||'';q('inp-price').value=item.price||'';q('inp-star').value=item.star||'';q('inp-ratings').value=item.ratings||'';q('inp-sales').value=item.sales||'';q('inp-prod-eid').value=asin;q('inp-comp-asins').value=(item.comp_asins||[]).join(', ');q('inp-note').value=item.note||'';q('inp-prod-ecat').value=loc.cat;q('inp-prod-esub').value=loc.sub;q('prod-ok-btn').textContent='保存修改';pendImg=item.img||getImg(asin)||null;var pre=q('md-img-pre');if(pendImg){pre.src=pendImg;pre.style.display='';q('md-img-ph').style.display='none';}else{pre.style.display='none';q('md-img-ph').style.display='';}fillCatSel('inp-prod-cat',loc.cat);fillSubSel('inp-prod-subcat',loc.cat,loc.sub);openMo('mo-prod');}
 function confirmProd(){var asin=q('inp-asin').value.trim().toUpperCase();if(!asin||asin.length<10){toast('请输入有效 ASIN');return;}var cat=q('inp-prod-cat').value,sub=q('inp-prod-subcat').value;if(!DATA[cat]||!DATA[cat][sub]){toast('请选择有效类目');return;}var eid=q('inp-prod-eid').value,ecat=q('inp-prod-ecat').value,esub=q('inp-prod-esub').value;var _oldIdx=-1;
   // FIX: capture fields not in the edit form BEFORE the old item is removed
   var _preserved={};
@@ -4152,7 +4157,6 @@ function confirmProd(){var asin=q('inp-asin').value.trim().toUpperCase();if(!asi
         // so editing the form doesn't wipe them.
         if(_pi.subtype)_preserved.subtype=_pi.subtype;
         if(_pi.grade)_preserved.grade=_pi.grade;
-        if(_pi.note)_preserved.note=_pi.note;
         if(_pi.ratingFetchedAt)_preserved.ratingFetchedAt=_pi.ratingFetchedAt;
         if(_pi._retiredFrom)_preserved._retiredFrom=_pi._retiredFrom;
         if(_pi._retiredAt)_preserved._retiredAt=_pi._retiredAt;
@@ -4164,11 +4168,10 @@ function confirmProd(){var asin=q('inp-asin').value.trim().toUpperCase();if(!asi
   }
   if(eid){if(ecat&&esub&&DATA[ecat]&&DATA[ecat][esub]){_oldIdx=(ecat===cat&&esub===sub)?DATA[ecat][esub].findIndex(function(it){return it.asin===eid;}):DATA[ecat][esub].findIndex(function(it){return it.asin===eid;});if(ecat===cat&&esub===sub)DATA[ecat][esub].splice(_oldIdx,1);else DATA[ecat][esub]=DATA[ecat][esub].filter(function(it){return it.asin!==eid;});}}else{if(subItems(cat,sub).some(function(it){return it.asin===asin;})){toast('该 ASIN 已存在');return;}}var rawComp=q('inp-comp-asins').value.trim();
   var compArr=rawComp?rawComp.split(/[,\s]+/).map(function(s){return s.trim().toUpperCase();}).filter(function(s){return s.length>=10;}).slice(0,10):[];
-  var item={asin:asin,sku:q('inp-sku').value.trim()||null,new_sku:q('inp-new-sku').value.trim()||null,price:parseFloat(q('inp-price').value)||null,star:parseFloat(q('inp-star').value)||null,ratings:parseInt(q('inp-ratings').value)||null,sales:parseInt(q('inp-sales').value)||null,subcat:sub,comp_asins:compArr.length?compArr:null};
+  var item={asin:asin,sku:q('inp-sku').value.trim()||null,new_sku:q('inp-new-sku').value.trim()||null,price:parseFloat(q('inp-price').value)||null,star:parseFloat(q('inp-star').value)||null,ratings:parseInt(q('inp-ratings').value)||null,sales:parseInt(q('inp-sales').value)||null,subcat:sub,comp_asins:compArr.length?compArr:null,note:q('inp-note').value.trim()||null};
   // Re-apply preserved fields
   if(_preserved.subtype)item.subtype=_preserved.subtype;
   if(_preserved.grade)item.grade=_preserved.grade;
-  if(_preserved.note)item.note=_preserved.note;
   if(_preserved.ratingFetchedAt)item.ratingFetchedAt=_preserved.ratingFetchedAt;
   if(_preserved._retiredFrom)item._retiredFrom=_preserved._retiredFrom;
   if(_preserved._retiredAt)item._retiredAt=_preserved._retiredAt;
@@ -5664,6 +5667,7 @@ function _applyImgs(){
         (updates.ratingScope.indexOf('cat::')===0?updates.ratingScope.slice(5)+'（整个大类）':
          updates.ratingScope.indexOf('sub::')===0?updates.ratingScope.slice(5).replace('::',' › '):'未知');
       toast('✓ 设置已保存 · 抓取范围：'+scopeLabel);
+      loadSettingsIntoUI();
       closeMo('mo-app-settings');
       // If user just enabled auto-rating, kick off the trickle now
       if(wasAutoRating&&typeof startRatingTrickle==='function'){
@@ -7489,10 +7493,18 @@ function exportPromoAmazonCsv(promoId){
 // 更新日志 (Changelog)
 // 每次发新版，在 CHANGELOG 数组最前面加一条即可。
 // ════════════════════════════════════════════════════════════════
-var APP_VERSION='3.5.26';
+var APP_VERSION='3.5.27';
 // 标题栏自动显示当前版本号（跟随 APP_VERSION，不用手动改）
 try{ document.title = 'Tangzon 产品管理 v' + APP_VERSION; }catch(e){}
 var CHANGELOG=[
+  {
+    v:'3.5.27', date:'2026-06-30',
+    notes:[
+      '修复：每次新增功能后版本号同步更新，GitHub 安装包可识别新版本',
+      '新增：产品编辑支持备注，可记录型号、尺寸、配件和其他产品信息，并显示在产品卡上',
+      '修复：应用设置保存后立即回读，关闭或重新打开后仍保持最新设置'
+    ]
+  },
   {
     v:'3.5.26', date:'2026-06-28',
     notes:[

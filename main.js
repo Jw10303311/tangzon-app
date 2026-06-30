@@ -431,24 +431,52 @@ function parseAmazonHtmlWithCheerio(html) {
   if (img && !/placeholder|transparent-pixel/i.test(img)) data.img = img.replace(/&amp;/g, '&');
   return { ok: true, data };
 }
-function getSettings() {
-  const cfg = loadConfig();
+const DEFAULT_SETTINGS = {
+  autoStart: false,
+  notifyExpiring: true,
+  notifyBackup: true,
+  minToTray: true,
+  autoRating: false,
+  ratingScope: 'all',
+  ratingOrder: 'oldest',
+  ratingMode: 'smart',
+  ratingQuota: 100,
+  ratingFailPauseMinutes: 30,
+  ratingFailPauseHours: 1,
+  closeToTrayShown: false
+};
+function normalizeSettings(cfg = {}) {
+  const quota = Number.parseInt(cfg.ratingQuota, 10);
+  let pauseMinutes = Number.parseInt(cfg.ratingFailPauseMinutes, 10);
+  if (!Number.isFinite(pauseMinutes) && cfg.ratingFailPauseHours !== undefined) {
+    const pauseHours = Number.parseInt(cfg.ratingFailPauseHours, 10);
+    if (Number.isFinite(pauseHours)) pauseMinutes = pauseHours * 60;
+  }
   return {
-    autoStart: cfg.autoStart || false,
-    notifyExpiring: cfg.notifyExpiring !== false,
-    notifyBackup: cfg.notifyBackup !== false,
-    minToTray: cfg.minToTray !== false,
-    autoRating: cfg.autoRating || false,
-    ratingScope: cfg.ratingScope || 'all',
-    ratingOrder: cfg.ratingOrder || 'oldest',
-    ratingMode: cfg.ratingMode || 'smart',
-    ratingQuota: cfg.ratingQuota || 100,
-    ratingFailPauseMinutes: cfg.ratingFailPauseMinutes || (cfg.ratingFailPauseHours ? cfg.ratingFailPauseHours * 60 : 30),
-    ratingFailPauseHours: cfg.ratingFailPauseHours || 1,
-    closeToTrayShown: cfg.closeToTrayShown || false
+    autoStart: cfg.autoStart === undefined ? DEFAULT_SETTINGS.autoStart : !!cfg.autoStart,
+    notifyExpiring: cfg.notifyExpiring === undefined ? DEFAULT_SETTINGS.notifyExpiring : !!cfg.notifyExpiring,
+    notifyBackup: cfg.notifyBackup === undefined ? DEFAULT_SETTINGS.notifyBackup : !!cfg.notifyBackup,
+    minToTray: cfg.minToTray === undefined ? DEFAULT_SETTINGS.minToTray : !!cfg.minToTray,
+    autoRating: cfg.autoRating === undefined ? DEFAULT_SETTINGS.autoRating : !!cfg.autoRating,
+    ratingScope: typeof cfg.ratingScope === 'string' && cfg.ratingScope ? cfg.ratingScope : DEFAULT_SETTINGS.ratingScope,
+    ratingOrder: typeof cfg.ratingOrder === 'string' && cfg.ratingOrder ? cfg.ratingOrder : DEFAULT_SETTINGS.ratingOrder,
+    ratingMode: typeof cfg.ratingMode === 'string' && cfg.ratingMode ? cfg.ratingMode : DEFAULT_SETTINGS.ratingMode,
+    ratingQuota: Number.isFinite(quota) ? Math.max(10, Math.min(500, quota)) : DEFAULT_SETTINGS.ratingQuota,
+    ratingFailPauseMinutes: Number.isFinite(pauseMinutes) ? Math.max(10, Math.min(180, pauseMinutes)) : DEFAULT_SETTINGS.ratingFailPauseMinutes,
+    ratingFailPauseHours: Number.isFinite(pauseMinutes) ? Math.max(1, Math.round(pauseMinutes / 60)) : DEFAULT_SETTINGS.ratingFailPauseHours,
+    closeToTrayShown: cfg.closeToTrayShown === undefined ? DEFAULT_SETTINGS.closeToTrayShown : !!cfg.closeToTrayShown
   };
 }
-function saveSettings(updates) { const cfg = loadConfig(); Object.assign(cfg, updates); saveConfig(cfg); }
+function getSettings() {
+  return normalizeSettings(loadConfig());
+}
+function saveSettings(updates) {
+  const cfg = loadConfig();
+  const next = normalizeSettings(Object.assign({}, cfg, updates || {}));
+  Object.assign(cfg, next);
+  saveConfig(cfg);
+  return next;
+}
 function hotUpdateSkipKey(appVersion, hotVersion) {
   return String(appVersion || '') + '|' + String(hotVersion || '');
 }
@@ -700,10 +728,10 @@ ipcMain.handle('open-backup-dir', () => shell.openPath(ensureBackupDir()));
 ipcMain.handle('is-electron', () => true);
 ipcMain.handle('get-settings', () => getSettings());
 ipcMain.handle('save-settings', (event, updates) => {
-  saveSettings(updates);
-  if ('autoStart' in updates) applyAutoStart(updates.autoStart);
+  const saved = saveSettings(updates);
+  if (updates && 'autoStart' in updates) applyAutoStart(saved.autoStart);
   rebuildTrayMenu();
-  return getSettings();
+  return saved;
 });
 ipcMain.handle('send-notification', (event, { title, body }) => {
   if (Notification.isSupported()) {
