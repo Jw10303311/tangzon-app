@@ -23,6 +23,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   showWindow: () => ipcRenderer.invoke('show-window'),
   quitApp: () => ipcRenderer.invoke('quit-app'),
   openExternal: (url) => ipcRenderer.invoke('open-external', url),
+  chooseExternalBrowserPath: () => ipcRenderer.invoke('choose-external-browser-path'),
   checkUpdates: () => ipcRenderer.invoke('check-updates'),
   checkHotUpdates: () => ipcRenderer.invoke('check-hot-updates'),
   getHotUpdateInfo: () => ipcRenderer.invoke('get-hot-update-info'),

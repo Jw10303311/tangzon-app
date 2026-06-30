@@ -2,11 +2,12 @@
 // Tangzon 产品管理 - Electron 主进程 v2
 // 含：开机自启、系统托盘、文件关联、桌面通知、拖放支持
 // ════════════════════════════════════════════════════════════════
-const { app, BrowserWindow, Menu, Tray, dialog, shell, ipcMain, session, Notification, nativeImage } = require('electron');
+const { app, BrowserWindow, Menu, Tray, dialog, shell, ipcMain, session, Notification, nativeImage, screen } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const https = require('https');
 const crypto = require('crypto');
+const childProcess = require('child_process');
 let cheerio = null;
 try { cheerio = require('cheerio'); }
 catch (e) { console.log('cheerio not available; Amazon parser will use renderer fallback:', e.message); }
@@ -40,6 +41,8 @@ let mainWindow = null;
 let tray = null;
 let isQuitting = false;
 let pendingFileArg = null;
+let updateProgressWindow = null;
+let updateProgressHideTimer = null;
 const BUILTIN_HTML_FILE = 'Tangzon_产品管理_个人版本.html';
 const HOT_UPDATE_MANIFEST_URL = process.env.TANGZON_HOT_UPDATE_URL || 'https://raw.githubusercontent.com/Jw10303311/tangzon-app/main/hot-update.json';
 const HOT_UPDATE_FALLBACK_URLS = [
@@ -104,6 +107,82 @@ function saveHotManifest(manifest) {
   fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(getHotManifestPath(), JSON.stringify(manifest, null, 2));
 }
+function escProgressText(v) {
+  return String(v == null ? '' : v).replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
+}
+function fmtBytes(n) {
+  if (!Number.isFinite(n) || n <= 0) return '';
+  if (n >= 1024 * 1024) return (n / 1024 / 1024).toFixed(1) + ' MB';
+  if (n >= 1024) return (n / 1024).toFixed(1) + ' KB';
+  return Math.round(n) + ' B';
+}
+function progressHtml() {
+  const doc = [
+    '<!doctype html><html><head><meta charset="utf-8"><style>',
+    '*{box-sizing:border-box}body{margin:0;font-family:"Microsoft YaHei",Segoe UI,sans-serif;background:transparent;color:#0f172a;overflow:hidden}',
+    '.box{width:100%;height:100%;background:#fff;border:1px solid rgba(15,23,42,.12);border-radius:10px;box-shadow:0 14px 36px rgba(15,23,42,.22);padding:13px 14px}',
+    '.title{font-size:13px;font-weight:700;margin-bottom:5px}.detail{font-size:11px;color:#64748b;line-height:1.35;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:10px}',
+    '.row{display:flex;align-items:center;gap:8px}.bar{height:8px;flex:1;border-radius:99px;background:#e2e8f0;overflow:hidden}.fill{height:100%;width:0%;background:#2563eb;border-radius:99px;transition:width .18s ease}.pct{width:42px;text-align:right;font-size:12px;font-weight:700;color:#1d4ed8}.status{margin-top:8px;font-size:10.5px;color:#64748b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
+    '</style></head><body><div class="box"><div class="title" id="t">Tangzon 正在下载更新</div><div class="detail" id="d">准备下载...</div><div class="row"><div class="bar"><div class="fill" id="f"></div></div><div class="pct" id="p">0%</div></div><div class="status" id="s">请保持网络连接，期间可以正常使用软件。</div></div>',
+    '<script>window.setProgress=function(data){data=data||{};document.getElementById("t").textContent=data.title||"Tangzon 正在下载更新";document.getElementById("d").textContent=data.detail||"";var pct=Number(data.percent);if(!isFinite(pct))pct=0;pct=Math.max(0,Math.min(100,pct));document.getElementById("f").style.width=pct+"%";document.getElementById("p").textContent=Math.round(pct)+"%";document.getElementById("s").textContent=data.status||"请保持网络连接，期间可以正常使用软件。";};<\/script></body></html>'
+  ].join('');
+  return 'data:text/html;charset=utf-8,' + encodeURIComponent(doc);
+}
+function ensureUpdateProgressWindow() {
+  if (updateProgressWindow && !updateProgressWindow.isDestroyed()) return updateProgressWindow;
+  const area = screen.getPrimaryDisplay().workArea;
+  const width = 340, height = 112;
+  updateProgressWindow = new BrowserWindow({
+    width, height,
+    x: area.x + area.width - width - 18,
+    y: area.y + area.height - height - 18,
+    frame: false,
+    resizable: false,
+    movable: false,
+    minimizable: false,
+    maximizable: false,
+    alwaysOnTop: true,
+    skipTaskbar: true,
+    focusable: false,
+    show: false,
+    backgroundColor: '#00000000',
+    webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: true }
+  });
+  updateProgressWindow.on('closed', () => { updateProgressWindow = null; });
+  updateProgressWindow.loadURL(progressHtml());
+  return updateProgressWindow;
+}
+function showUpdateProgress(data = {}) {
+  clearTimeout(updateProgressHideTimer);
+  const win = ensureUpdateProgressWindow();
+  const payload = JSON.stringify(data);
+  const apply = () => {
+    if (!win || win.isDestroyed()) return;
+    win.webContents.executeJavaScript('window.setProgress(' + payload + ')').catch(() => {});
+    if (!win.isVisible()) win.showInactive();
+  };
+  if (win.webContents.isLoading()) win.webContents.once('did-finish-load', apply);
+  else apply();
+  const percent = Number(data.percent);
+  if (mainWindow && Number.isFinite(percent)) mainWindow.setProgressBar(Math.max(0, Math.min(1, percent / 100)));
+}
+function finishUpdateProgress(title, detail, ok = true) {
+  const percent = ok ? 100 : 0;
+  showUpdateProgress({ title, detail, percent, status: ok ? '下载完成。' : '下载失败，可稍后重试。' });
+  if (mainWindow) mainWindow.setProgressBar(ok ? 1 : -1);
+  clearTimeout(updateProgressHideTimer);
+  updateProgressHideTimer = setTimeout(() => {
+    if (mainWindow) mainWindow.setProgressBar(-1);
+    if (updateProgressWindow && !updateProgressWindow.isDestroyed()) updateProgressWindow.close();
+  }, ok ? 2400 : 4200);
+}
+function progressDetail(p) {
+  const got = fmtBytes(p && p.transferred);
+  const total = fmtBytes(p && p.total);
+  if (got && total) return got + ' / ' + total;
+  if (got) return '已下载 ' + got;
+  return '正在连接下载服务器...';
+}
 function resolveAppHtmlPath() {
   const manifest = loadHotManifest();
   const hotHtml = getHotHtmlPath();
@@ -122,7 +201,7 @@ function compareVersions(a, b) {
   }
   return 0;
 }
-function fetchHttpsBuffer(url, maxBytes = 1024 * 1024, redirects = 3) {
+function fetchHttpsBuffer(url, maxBytes = 1024 * 1024, redirects = 3, onProgress = null) {
   return new Promise((resolve, reject) => {
     let parsed;
     try { parsed = new URL(url); }
@@ -136,7 +215,7 @@ function fetchHttpsBuffer(url, maxBytes = 1024 * 1024, redirects = 3) {
         res.resume();
         if (redirects <= 0) { reject(new Error('too_many_redirects')); return; }
         const nextUrl = new URL(res.headers.location, parsed).toString();
-        fetchHttpsBuffer(nextUrl, maxBytes, redirects - 1).then(resolve, reject);
+        fetchHttpsBuffer(nextUrl, maxBytes, redirects - 1, onProgress).then(resolve, reject);
         return;
       }
       if (res.statusCode < 200 || res.statusCode >= 300) {
@@ -146,6 +225,8 @@ function fetchHttpsBuffer(url, maxBytes = 1024 * 1024, redirects = 3) {
       }
       const chunks = [];
       let size = 0;
+      const total = Number.parseInt(res.headers['content-length'] || '0', 10) || 0;
+      if (typeof onProgress === 'function') onProgress({ transferred: 0, total, percent: total ? 0 : null, url });
       res.on('data', (chunk) => {
         size += chunk.length;
         if (size > maxBytes) {
@@ -153,6 +234,10 @@ function fetchHttpsBuffer(url, maxBytes = 1024 * 1024, redirects = 3) {
           return;
         }
         chunks.push(chunk);
+        if (typeof onProgress === 'function') {
+          const percent = total ? Math.min(100, (size / total) * 100) : null;
+          onProgress({ transferred: size, total, percent, url });
+        }
       });
       res.on('end', () => resolve(Buffer.concat(chunks)));
     });
@@ -216,6 +301,7 @@ async function clearHotUpdate() {
 async function checkHotUpdate(silent = false) {
   const cfg = loadConfig();
   const manifestUrl = cfg.hotUpdateUrl || HOT_UPDATE_MANIFEST_URL;
+  let hotDownloadStarted = false;
   try {
     const manifestResult = await fetchHotManifestBuffer(manifestUrl);
     const manifestBuf = manifestResult.buffer;
@@ -260,7 +346,11 @@ async function checkHotUpdate(silent = false) {
       return { ok: false, error: 'hot_update_manifest_incomplete' };
     }
 
-    const htmlBuf = await fetchHttpsBuffer(htmlFile.url, 12 * 1024 * 1024);
+    hotDownloadStarted = true;
+    showUpdateProgress({ title: 'Tangzon 小更新下载中', detail: '正在下载界面更新文件...', percent: 0, status: '请保持网络连接，期间可以正常使用软件。' });
+    const htmlBuf = await fetchHttpsBuffer(htmlFile.url, 12 * 1024 * 1024, 3, (p) => {
+      showUpdateProgress({ title: 'Tangzon 小更新下载中', detail: progressDetail(p), percent: p.percent == null ? 0 : p.percent, status: '请保持网络连接，期间可以正常使用软件。' });
+    });
     const actualHash = sha256(htmlBuf);
     if (String(actualHash).toLowerCase() !== String(htmlFile.sha256).toLowerCase()) {
       return { ok: false, error: 'hot_update_hash_mismatch' };
@@ -307,6 +397,7 @@ async function checkHotUpdate(silent = false) {
     }
     return { ok: true, applied: true, version: remote.version, notes: installed.notes };
   } catch (e) {
+    if (hotDownloadStarted) finishUpdateProgress('Tangzon 小更新下载失败', friendlyNetworkMessage(e), false);
     if (!silent) {
       dialog.showMessageBox(mainWindow, {
         type: 'warning',
@@ -436,6 +527,8 @@ const DEFAULT_SETTINGS = {
   notifyExpiring: true,
   notifyBackup: true,
   autoCheckUpdates: true,
+  externalBrowser: 'system',
+  externalBrowserPath: '',
   minToTray: true,
   autoRating: false,
   ratingScope: 'all',
@@ -446,6 +539,79 @@ const DEFAULT_SETTINGS = {
   ratingFailPauseHours: 1,
   closeToTrayShown: false
 };
+function normalizeExternalBrowser(value) {
+  const v = String(value || '').toLowerCase();
+  return ['system', 'chrome', 'edge', 'ziniao', 'custom'].includes(v) ? v : DEFAULT_SETTINGS.externalBrowser;
+}
+function existingFile(p) {
+  try { return p && fs.existsSync(p) && fs.statSync(p).isFile() ? p : null; }
+  catch (e) { return null; }
+}
+function browserCandidates(kind, cfg = {}) {
+  const env = process.env;
+  const pf = env.ProgramFiles || 'C:\Program Files';
+  const pfx86 = env['ProgramFiles(x86)'] || 'C:\Program Files (x86)';
+  const local = env.LOCALAPPDATA || path.join(app.getPath('home'), 'AppData', 'Local');
+  const roaming = env.APPDATA || path.join(app.getPath('home'), 'AppData', 'Roaming');
+  if (kind === 'chrome') return [
+    path.join(pf, 'Google', 'Chrome', 'Application', 'chrome.exe'),
+    path.join(pfx86, 'Google', 'Chrome', 'Application', 'chrome.exe'),
+    path.join(local, 'Google', 'Chrome', 'Application', 'chrome.exe')
+  ];
+  if (kind === 'edge') return [
+    path.join(pf, 'Microsoft', 'Edge', 'Application', 'msedge.exe'),
+    path.join(pfx86, 'Microsoft', 'Edge', 'Application', 'msedge.exe'),
+    path.join(local, 'Microsoft', 'Edge', 'Application', 'msedge.exe')
+  ];
+  if (kind === 'ziniao') {
+    const direct = [cfg.externalBrowserPath].filter(Boolean);
+    const common = [
+      path.join(local, 'Programs', 'ZiNiao', 'ZiNiao.exe'),
+      path.join(local, 'Programs', 'ZiNiaoBrowser', 'ZiNiaoBrowser.exe'),
+      path.join(local, 'Programs', 'ZiniaoBrowser', 'ZiniaoBrowser.exe'),
+      path.join(local, 'Programs', 'Zibird', 'Zibird.exe'),
+      path.join(pf, 'ZiNiao', 'ZiNiao.exe'),
+      path.join(pf, 'ZiNiaoBrowser', 'ZiNiaoBrowser.exe'),
+      path.join(pf, 'ZiniaoBrowser', 'ZiniaoBrowser.exe'),
+      path.join(pf, 'Zibird', 'Zibird.exe'),
+      path.join(pfx86, 'ZiNiao', 'ZiNiao.exe'),
+      path.join(pfx86, 'ZiNiaoBrowser', 'ZiNiaoBrowser.exe'),
+      path.join(pfx86, 'ZiniaoBrowser', 'ZiniaoBrowser.exe'),
+      path.join(pfx86, 'Zibird', 'Zibird.exe'),
+      path.join(roaming, 'ZiNiao', 'ZiNiao.exe'),
+      path.join(roaming, 'ZiniaoBrowser', 'ZiniaoBrowser.exe')
+    ];
+    return direct.concat(common);
+  }
+  if (kind === 'custom') return [cfg.externalBrowserPath].filter(Boolean);
+  return [];
+}
+function findBrowserExecutable(kind, cfg = {}) {
+  for (const p of browserCandidates(kind, cfg)) {
+    const found = existingFile(p);
+    if (found) return found;
+  }
+  return null;
+}
+function openExternalUrl(url) {
+  if (typeof url !== 'string' || (!url.startsWith('http://') && !url.startsWith('https://'))) return false;
+  const cfg = getSettings();
+  const mode = normalizeExternalBrowser(cfg.externalBrowser);
+  if (mode !== 'system') {
+    const exe = findBrowserExecutable(mode, cfg);
+    if (exe) {
+      try {
+        const child = childProcess.spawn(exe, [url], { detached: true, stdio: 'ignore' });
+        child.unref();
+        return true;
+      } catch (e) {
+        console.error('Open external browser failed:', e);
+      }
+    }
+  }
+  shell.openExternal(url);
+  return true;
+}
 function normalizeSettings(cfg = {}) {
   const quota = Number.parseInt(cfg.ratingQuota, 10);
   let pauseMinutes = Number.parseInt(cfg.ratingFailPauseMinutes, 10);
@@ -458,6 +624,8 @@ function normalizeSettings(cfg = {}) {
     notifyExpiring: cfg.notifyExpiring === undefined ? DEFAULT_SETTINGS.notifyExpiring : !!cfg.notifyExpiring,
     notifyBackup: cfg.notifyBackup === undefined ? DEFAULT_SETTINGS.notifyBackup : !!cfg.notifyBackup,
     autoCheckUpdates: cfg.autoCheckUpdates === undefined ? DEFAULT_SETTINGS.autoCheckUpdates : !!cfg.autoCheckUpdates,
+    externalBrowser: normalizeExternalBrowser(cfg.externalBrowser),
+    externalBrowserPath: typeof cfg.externalBrowserPath === 'string' ? cfg.externalBrowserPath : '',
     minToTray: cfg.minToTray === undefined ? DEFAULT_SETTINGS.minToTray : !!cfg.minToTray,
     autoRating: cfg.autoRating === undefined ? DEFAULT_SETTINGS.autoRating : !!cfg.autoRating,
     ratingScope: typeof cfg.ratingScope === 'string' && cfg.ratingScope ? cfg.ratingScope : DEFAULT_SETTINGS.ratingScope,
@@ -553,14 +721,14 @@ function createWindow(showImmediately = true) {
   mainWindow.on('closed', () => { mainWindow = null; });
   // Robust external link handling: both setWindowOpenHandler AND will-navigate
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    if (url.startsWith('http://') || url.startsWith('https://')) shell.openExternal(url);
+    if (url.startsWith('http://') || url.startsWith('https://')) openExternalUrl(url);
     return { action: 'deny' };
   });
   mainWindow.webContents.on('will-navigate', (event, url) => {
     // Don't intercept the initial file:// load
     if (url.startsWith('file://')) return;
     event.preventDefault();
-    if (url.startsWith('http://') || url.startsWith('https://')) shell.openExternal(url);
+    if (url.startsWith('http://') || url.startsWith('https://')) openExternalUrl(url);
   });
   mainWindow.webContents.once('did-finish-load', () => {
     if (pendingFileArg) { sendImportFile(pendingFileArg); pendingFileArg = null; }
@@ -696,12 +864,15 @@ function buildMenu() {
 }
 
 // ── IPC ──────────────────────────────────────────────────────
-ipcMain.handle('open-external', (event, url) => {
-  if (typeof url === 'string' && (url.startsWith('http://') || url.startsWith('https://'))) {
-    shell.openExternal(url);
-    return true;
-  }
-  return false;
+ipcMain.handle('open-external', (event, url) => openExternalUrl(url));
+ipcMain.handle('choose-external-browser-path', async () => {
+  const result = await dialog.showOpenDialog(mainWindow, {
+    title: '选择浏览器程序',
+    properties: ['openFile'],
+    filters: [{ name: '应用程序', extensions: ['exe'] }]
+  });
+  if (result.canceled || !result.filePaths || !result.filePaths[0]) return { ok: false, canceled: true };
+  return { ok: true, path: result.filePaths[0] };
 });
 ipcMain.handle('check-updates', () => checkForUpdates(false));
 ipcMain.handle('check-hot-updates', () => checkHotUpdate(false));
@@ -821,6 +992,7 @@ function setupAutoUpdater() {
     }).then((res) => {
       if (res.response === 1) {
         clearSkippedFullUpdate(version);
+        showUpdateProgress({ title: 'Tangzon 正在下载完整更新', detail: '准备下载完整安装包...', percent: 0, status: '下载完成后会提示你重启安装。' });
         autoUpdater.downloadUpdate();
         if (mainWindow) {
           new Notification({
@@ -851,6 +1023,7 @@ function setupAutoUpdater() {
 
   autoUpdater.on('error', (err) => {
     console.error('Auto-update error:', err);
+    if (updateProgressWindow && !updateProgressWindow.isDestroyed()) finishUpdateProgress('Tangzon 完整更新下载失败', friendlyNetworkMessage(err), false);
     if (_manualUpdateCheck && mainWindow) {
       dialog.showMessageBox(mainWindow, {
         type: 'warning',
@@ -862,8 +1035,21 @@ function setupAutoUpdater() {
     _manualUpdateCheck = false;
   });
 
+  autoUpdater.on('download-progress', (info) => {
+    const percent = Number(info && info.percent) || 0;
+    const transferred = Number(info && info.transferred) || 0;
+    const total = Number(info && info.total) || 0;
+    showUpdateProgress({
+      title: 'Tangzon 正在下载完整更新',
+      detail: progressDetail({ transferred, total }),
+      percent,
+      status: '下载完成后会提示你重启安装。'
+    });
+  });
+
   autoUpdater.on('update-downloaded', (info) => {
     if (!mainWindow) return;
+    finishUpdateProgress('Tangzon 完整更新下载完成', '新版本 v' + info.version + ' 已下载完成。', true);
     dialog.showMessageBox(mainWindow, {
       type: 'info',
       title: '更新已就绪',

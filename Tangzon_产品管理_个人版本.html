@@ -830,6 +830,21 @@ body.dark .cpal{background:rgba(0,0,0,.7);}
     </label>
   </div>
   <div class="fg" style="padding:12px;background:var(--sur2);border-radius:8px;margin-top:8px">
+    <div style="font-weight:600;color:var(--tx);font-size:13px">外部链接打开方式</div>
+    <div style="font-size:11px;color:var(--tx3);margin-top:2px;line-height:1.5">产品 Amazon 链接、GitHub 链接等会按这里打开；选紫鸟时可手动指定紫鸟程序路径。</div>
+    <div style="margin-top:9px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      <select class="fsel" id="set-external-browser" onchange="syncExternalBrowserUI()" style="font-size:11.5px;padding:6px 8px;flex:1;min-width:160px">
+        <option value="system">系统默认浏览器</option>
+        <option value="chrome">Chrome</option>
+        <option value="edge">Edge</option>
+        <option value="ziniao">紫鸟浏览器</option>
+        <option value="custom">自定义程序</option>
+      </select>
+      <button class="btn-c" id="set-external-browser-pick" onclick="pickExternalBrowserPath()" style="font-size:10.5px">选择程序</button>
+    </div>
+    <input class="fi" id="set-external-browser-path" placeholder="紫鸟或自定义浏览器 .exe 路径（可选）" style="margin-top:8px;font-size:11px;padding:6px 8px">
+  </div>
+  <div class="fg" style="padding:12px;background:var(--sur2);border-radius:8px;margin-top:8px">
     <div style="font-weight:600;color:var(--tx);font-size:13px">数据保护</div>
     <div id="backup-dir-label" style="font-size:11px;color:var(--tx3);margin-top:2px;line-height:1.5">自动备份每天保存一次；导入、清空、批量淘汰前会生成恢复点。</div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:9px">
@@ -5560,6 +5575,28 @@ function _applyImgs(){
   var settingsBtn=document.getElementById('settings-btn');
   if(settingsBtn)settingsBtn.style.display='inline-flex';
 
+  function syncExternalBrowserUI(){
+    var mode=document.getElementById('set-external-browser');
+    var pathEl=document.getElementById('set-external-browser-path');
+    var pick=document.getElementById('set-external-browser-pick');
+    var active=mode&&(mode.value==='ziniao'||mode.value==='custom');
+    if(pathEl)pathEl.style.display=active?'block':'none';
+    if(pick)pick.style.display=active?'inline-flex':'none';
+  }
+  function pickExternalBrowserPath(){
+    if(!window.electronAPI||!window.electronAPI.chooseExternalBrowserPath){toast('当前环境不支持选择程序');return;}
+    window.electronAPI.chooseExternalBrowserPath().then(function(res){
+      if(res&&res.ok&&res.path){
+        var p=document.getElementById('set-external-browser-path');
+        if(p)p.value=res.path;
+        var s=document.getElementById('set-external-browser');
+        if(s&&s.value==='system')s.value='custom';
+        syncExternalBrowserUI();
+      }
+    });
+  }
+  window.syncExternalBrowserUI=syncExternalBrowserUI;
+  window.pickExternalBrowserPath=pickExternalBrowserPath;
   function loadSettingsIntoUI(){
     window.electronAPI.getSettings().then(function(s){
       var a=document.getElementById('set-autostart');
@@ -5567,6 +5604,8 @@ function _applyImgs(){
       var ne=document.getElementById('set-notify-expiring');
       var nb=document.getElementById('set-notify-backup');
       var acu=document.getElementById('set-auto-check-updates');
+      var eb=document.getElementById('set-external-browser');
+      var ebp=document.getElementById('set-external-browser-path');
       var ar=document.getElementById('set-auto-rating');
       var sc=document.getElementById('set-rating-scope');
       var so=document.getElementById('set-rating-order');
@@ -5578,6 +5617,9 @@ function _applyImgs(){
       if(ne)ne.checked=!!s.notifyExpiring;
       if(nb)nb.checked=!!s.notifyBackup;
       if(acu)acu.checked=s.autoCheckUpdates!==false;
+      if(eb)eb.value=s.externalBrowser||'system';
+      if(ebp)ebp.value=s.externalBrowserPath||'';
+      syncExternalBrowserUI();
       if(ar)ar.checked=!!s.autoRating;
       if(sc){
         var opts=['<option value="all">全部产品</option>'];
@@ -5650,6 +5692,8 @@ function _applyImgs(){
       notifyExpiring:document.getElementById('set-notify-expiring').checked,
       notifyBackup:document.getElementById('set-notify-backup').checked,
       autoCheckUpdates:document.getElementById('set-auto-check-updates')?document.getElementById('set-auto-check-updates').checked:true,
+      externalBrowser:document.getElementById('set-external-browser')?document.getElementById('set-external-browser').value:'system',
+      externalBrowserPath:document.getElementById('set-external-browser-path')?document.getElementById('set-external-browser-path').value.trim():'',
       autoRating:document.getElementById('set-auto-rating')?document.getElementById('set-auto-rating').checked:false,
       ratingScope:document.getElementById('set-rating-scope')?document.getElementById('set-rating-scope').value:'all',
       ratingOrder:document.getElementById('set-rating-order')?document.getElementById('set-rating-order').value:'oldest',
@@ -7503,10 +7547,26 @@ function exportPromoAmazonCsv(promoId){
 // 更新日志 (Changelog)
 // 每次发新版，在 CHANGELOG 数组最前面加一条即可。
 // ════════════════════════════════════════════════════════════════
-var APP_VERSION='3.5.28';
+var APP_VERSION='3.5.30';
 // 标题栏自动显示当前版本号（跟随 APP_VERSION，不用手动改）
 try{ document.title = 'Tangzon 产品管理 v' + APP_VERSION; }catch(e){}
 var CHANGELOG=[
+  {
+    v:'3.5.30', date:'2026-06-30',
+    notes:[
+      '新增：完整更新和小更新下载时，桌面右下角显示下载进度浮窗',
+      '优化：下载进度同步显示百分比和已下载大小，完成或失败后自动收起',
+      '优化：Windows 任务栏也会显示下载进度，方便确认更新状态'
+    ]
+  },
+  {
+    v:'3.5.29', date:'2026-06-30',
+    notes:[
+      '新增：设置里可选择外部链接打开方式，支持系统默认、Chrome、Edge、紫鸟和自定义程序',
+      '优化：产品链接、GitHub 链接等统一按外部链接设置打开',
+      '说明：选紫鸟时如果自动识别不到安装位置，可手动选择紫鸟浏览器 exe 路径'
+    ]
+  },
   {
     v:'3.5.28', date:'2026-06-30',
     notes:[
