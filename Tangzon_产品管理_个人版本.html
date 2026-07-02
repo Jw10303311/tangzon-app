@@ -809,6 +809,13 @@ body.dark .cpal{background:rgba(0,0,0,.7);}
     </label>
   </div>
   <div class="fg" style="display:flex;align-items:center;gap:10px;padding:12px;background:var(--sur2);border-radius:8px;margin-bottom:8px">
+    <input type="checkbox" id="set-light-tray" style="width:16px;height:16px;cursor:pointer">
+    <label for="set-light-tray" style="flex:1;cursor:pointer;font-size:13px">
+      <div style="font-weight:600;color:var(--tx)">&#21518;&#21488;&#36731;&#37327;&#27169;&#24335;</div>
+      <div style="font-size:11px;color:var(--tx3);margin-top:2px">&#28857; X &#21518;&#37322;&#25918;&#20027;&#30028;&#38754;&#20869;&#23384;&#65292;&#20174;&#25176;&#30424;&#20877;&#25171;&#24320;&#26102;&#24674;&#22797;&#30028;&#38754;</div>
+    </label>
+  </div>
+  <div class="fg" style="display:flex;align-items:center;gap:10px;padding:12px;background:var(--sur2);border-radius:8px;margin-bottom:8px">
     <input type="checkbox" id="set-notify-expiring" style="width:16px;height:16px;cursor:pointer">
     <label for="set-notify-expiring" style="flex:1;cursor:pointer;font-size:13px">
       <div style="font-weight:600;color:var(--tx)">活动到期通知</div>
@@ -1164,7 +1171,28 @@ body.dark .cpal{background:rgba(0,0,0,.7);}
 <script>
 
 var BASE_DATA = {};
-var IMGS={};
+var _imgDirtySet={},_imgCacheLimit=180,_imgMemoryOrder=[],_imgLoadingMap={};
+function _normalizeAsinKey(asin){return (asin||'').trim().toUpperCase();}
+function _rememberImgKey(asin){
+  asin=_normalizeAsinKey(asin);if(!asin)return;
+  var i=_imgMemoryOrder.indexOf(asin);if(i>=0)_imgMemoryOrder.splice(i,1);
+  _imgMemoryOrder.push(asin);
+  while(_imgMemoryOrder.length>_imgCacheLimit){
+    var old=_imgMemoryOrder.shift();
+    if(old&&!_imgDirtySet[old]&&IMGS&&IMGS[old])delete IMGS[old];
+  }
+}
+function _makeImgStore(base){
+  if(typeof Proxy==='undefined')return base||{};
+  return new Proxy(base||{},{
+    set:function(obj,key,val){
+      obj[key]=val;
+      if(typeof key==='string'&&val){_imgDirtySet[key]=1;_rememberImgKey(key);}
+      return true;
+    }
+  });
+}
+var IMGS=_makeImgStore({});
 var SUB_TRANS = {"Air Purifiers":"空气净化器","Air Tool Accessories":"气动工具配件","Airbrush Materials":"喷笔材料","Automotive Boot Organizers":"汽车后备箱收纳","Automotive Floor Jacks":"汽车液压千斤顶","Axle Stands":"车轴支架","Baker's Racks":"烘焙置物架","Bar Cabinets":"酒柜","Bar Sets":"酒吧套装","Bar Tables":"吧台桌","Barbecue Carts":"烧烤推车","Barbecue Covers":"烧烤罩","Barstools":"吧台凳","Beach Umbrellas":"沙滩伞","Benches":"长凳","Beverage Refrigerators":"饮料冰箱","Bike Cargo Trailers":"自行车货物拖车","Blower Fans":"鼓风机","Boat Fenders":"船用护舷","Boat Ladders":"船用梯","Boat Outboard Motors":"船用外置马达","Boat Trolling Motors":"船用电动马达","Brushes & Dusters":"刷子与除尘器","Cabinet Safes":"柜式保险箱","Camp Stoves":"野营炉","Camping & Hiking Hygiene & Sanitation":"户外卫生清洁","Camping Air Beds":"充气床垫","Camping Chairs":"野营椅","Camping Coolers & Cool Bags":"野营冷藏箱/包","Camping Cots":"折叠野营床","Camping Cupboards":"野营储物柜","Camping Hammocks & Loungers":"野营吊床与躺椅","Camping Stools":"野营凳","Camping Tables":"野营桌","Canopy Swings":"遮阳秋千","Car Accessories":"汽车配件","Car Battery Jump Starters":"汽车启动电源","Car Petrol Pumps":"汽车油泵","Car Refrigerators":"车载冰箱","Car Seat Accessories (Automotive)":"汽车座椅配件","Car Tyre & Rim Accessories":"轮胎与轮辋配件","Car Tyre & Rim Stands":"轮胎与轮辋支架","Carpet Washers":"地毯清洗机","Carts (Home & Kitchen)":"家用推车","Ceiling Fans with Lamps":"吊扇灯","Chafing Dishes & Food Warmers":"暖菜锅与保温器","Chain Barriers":"链式护栏","Chalkboards":"黑板","Charcoal Barbecues":"木炭烧烤炉","Christmas Trees":"圣诞树","Cleaning Buckets & Bowls":"清洁桶与盆","Coffee & Espresso Machines":"咖啡机","Commercial Floor Mats & Matting":"商用地垫","Commercial Food Warmers":"商用保温台","Commercial Mop & Bucket Sets":"商用拖把套装","Commercial Sweepers":"商用扫地机","Crimpers":"压线钳","Cultivators & Tillers":"松土机与旋耕机","Deck Boxes":"户外储物箱","Deck Hardware":"甲板五金件","Decorative Artificial Flowers":"装饰人造花","Decorative Artificial Plants":"装饰人造植物","Decorative Artificial Trees":"装饰人造树","Decorative Fences":"装饰围栏","Deep Fryers":"油炸锅","Dehumidifiers":"除湿机","Desks":"书桌","Dining Chairs":"餐椅","Dining Room Sets":"餐厅套装","Dining Tables":"餐桌","Disc Sanders":"盘式砂磨机","Dish Drainers":"碗碟沥水架","Dome Tents":"圆顶帐篷","Drum Fans":"桶式风扇","Electric Barbecues":"电烧烤炉","Electric Griddles":"电煎板","Electric Heating":"电暖器","Electrical Fireplaces":"电壁炉","Engine Hoists":"发动机吊架","Evaporative Coolers":"蒸发式冷风机","Event Shelters":"活动遮棚","Fireplace Spark Protection":"壁炉防火网","Fireplace Tool Sets":"壁炉工具套装","Floating Shelves":"悬浮墙架","Floor Fans":"落地扇","Floor Lamps & Torchieres":"落地灯","Flooring (DIY & Tools)":"地板（DIY）","Flooring (Sports & Outdoors)":"地板（户外运动）","Flower Pots":"花盆","Foam Sleeping Mats for Camping":"泡沫野营垫","Folding Chairs":"折叠椅","Food Dehydrators":"食品脱水机","Food Preparation Tables":"食品备餐台","Food Service Carts":"餐饮服务推车","Freestanding Barbecues":"独立式烧烤炉","Full Car Covers":"全车车衣","Garage & Workshop Equipment":"车库与工作室设备","Garage Shelves":"车库置物架","Garage Utility Racks":"车库多功能架","Garage Wall Racks":"车库墙壁挂架","Garden Arbours":"花园凉亭","Garden Awnings":"花园遮阳篷","Garden Benches":"花园长椅","Garden Bridges":"花园桥","Garden Carts & Wagons":"花园推车","Garden Compost Bins":"花园堆肥桶","Garden Dining Chairs":"花园餐椅","Garden Edging":"花园边界围栏","Garden Furniture Sets":"花园家具套装","Garden Hose Carts":"花园水管推车","Garden Hose Reels":"花园水管卷盘","Garden Parasols":"花园遮阳伞","Garden Serving Carts":"花园服务推车","Garden Sheds":"花园储物室","Garden Showers":"花园淋浴","Garden Tool Holders":"花园工具架","Garden Trellises":"花园藤架","Gardening Kneelers":"园艺护膝垫","Gardening Stools":"园艺凳","Gazebos":"凉亭","Germination Tables":"育苗台","Greenhouses":"温室","Gun Cabinets":"枪柜","Gun Safes":"枪支保险箱","Hammock Stands":"吊床架","Hand Tile Cutters":"手动瓷砖切割机","Hand Trucks":"手推车","Handrails":"扶手栏杆","Hanging Planters & Baskets":"悬挂花篮","Home Office Stools":"家庭办公凳","Hot Water Dispensers":"热水机","Hotel Safes":"酒店保险箱","Hunting Blind":"狩猎隐蔽棚","Ice Crushers":"碎冰机","Ice Cube Makers":"制冰机","Identification Badges":"身份证/工牌","Indoor Compost Bins":"室内堆肥桶","Indoor Recycling Bins":"室内垃圾分类桶","Ironing Boards":"烫衣板","Kitchen Floor Cabinets":"厨房落地柜","Kitchen Storage Carts":"厨房储物推车","Laptop Computer Stands":"笔记本电脑支架","Lawn & Garden Spreaders":"草坪施肥播种机","Lawn & Garden Sprinklers":"草坪喷水器","Lawn Scarifiers":"草坪清沙机","Lifts, Hoists & Jacks":"升降机与千斤顶","Manikins":"人体模型","Manual Lawn Aerators":"手动草坪打孔机","Material Handling Ramps":"物料搬运坡道","Meat Grinders":"绞肉机","Medical Models & Educational Materials":"医学模型与教材","Message Boards & Signs":"留言板与标牌","Metal Detectors":"金属探测器","Mini Fridges":"迷你冰箱","Mobile Air Conditioners":"移动空调","Mobile File Cabinets":"移动文件柜","Mobile Kitchen Storage Islands":"移动厨房岛台","Motorbike Accessories":"摩托车配件","Motorbike Lifts":"摩托车升降台","Motorbike Loading Ramps":"摩托车上车坡道","Motorbike Stands":"摩托车支架","Motorcycle Covers":"摩托车车罩","Non-Slip Mats":"防滑垫","Novelty Decorations":"创意装饰品","Outdoor Canopies":"户外遮阳棚","Outdoor Cocktail Tables":"户外鸡尾酒桌","Outdoor Dining Tables":"户外餐桌","Outdoor Dustbins":"户外垃圾桶","Outdoor Fire Pits":"户外火坑","Outdoor Firewood Racks":"户外柴火架","Outdoor Freestanding Fountains":"户外独立喷泉","Outdoor Heater Covers":"户外加热器罩","Outdoor Pizza Ovens":"户外披萨烤箱","Outdoor Side Tables":"户外边桌","Outdoor Statues":"户外雕像","Paint Guns & Accessories":"喷枪与配件","Paint Sprayers":"涂料喷涂机","Parasol Stands & Bases":"遮阳伞底座","Parking Barriers":"停车护栏","Pathway Lighting":"小径照明灯","Patio Bar Sets":"露台酒吧套装","Patio Bistro Sets":"露台小酒馆套装","Patio Dining Sets":"露台餐厅套装","Patio Heaters":"户外取暖器","Pedestal Fans":"台式风扇","Pendant Light Fixtures":"吊灯","Picnic Tables":"野餐桌","Plant Cages & Supports":"植物支架与笼","Plant Stands":"花架","Planter Boxes":"种植箱","Platform Trucks":"平台搬运车","Pool Heaters":"泳池加热器","Pool Ladders":"泳池梯","Pool Reel Systems":"泳池卷管系统","Pop-Up Tents":"速开帐篷","Portable Washers":"便携式洗衣机","Postal Scales":"邮政秤","Pot & Pan Racks":"锅具置物架","Power Tillers":"电动旋耕机","Power Tools Stands":"电动工具架","Pressure Washer Lances & Wands":"高压清洗枪管","Pressure Washers":"高压清洗机","Projector Stands":"投影仪支架","Propane Grills":"丙烷烧烤炉","Racks & Holders":"置物架与收纳架","Raised Garden Kits":"高架种植套件","Rakes":"耙子","Rectangular Sleeping Bags":"矩形睡袋","Riding Lawn Mowers & Tractors":"乘骑式割草机","Riveters":"铆钉枪","Rod Racks":"钓竿架","Roof Boxes":"车顶行李箱","Roof Racks":"车顶行李架","Rope Barriers":"绳索护栏","Rotary Mowers":"旋转式割草机","Safety Cones":"安全锥","Sandwich Toasters & Panini Presses":"三明治机与帕尼尼机","Saw Horses":"锯木架","Screwdriver Bit Sets":"螺丝刀头套装","Self-Inflating Sleeping Mats for Camping":"自充气野营垫","Service Carts":"服务推车","Serving Trolleys":"餐厅服务车","Shaved Ice Equipment & Supplies":"刨冰机及耗材","Shopping Trolleys":"购物推车","Sideboards":"备餐柜","Single Serve Coffee Machines":"单杯咖啡机","Snow Rakes":"除雪耙","Snow Shovels (DIY & Tools)":"雪铲","Snow Socks":"汽车防雪套","Snow Throwers":"抛雪机","Socket Sets":"套筒扳手套装","Speaker Stands":"音箱支架","Spice Racks":"调料架","Stadium Seats & Cushions":"体育场座椅与坐垫","Standing Baker's Racks":"落地烘焙架","Standing Shelf Units":"落地置物架","Steam Cleaners":"蒸汽清洁机","Stepladders":"折叠梯","Stepstools":"脚踏凳","Storage Drawer Carts":"抽屉推车","Storage Drawer Units":"抽屉储物柜","Studio Accessories":"摄影棚配件","Sunloungers":"躺椅","TV Mount Stands":"电视支架","Tackle Boxes":"钓具盒","Tall Kitchen Cupboards":"高型厨柜","Teppanyaki Grills":"铁板烧烤炉","Tool Boxes":"工具箱","Tool Cabinets":"工具柜","Trailer Couplings":"拖车挂钩","Trekking Poles":"登山杖","Under Kitchen Counter Bins":"橱柜下垃圾桶","Vented Dryers":"排风烘干机","Wall Mount Mailboxes":"壁挂邮箱","Wall-Mounted Fans":"壁挂风扇","Washing Machines":"洗衣机","Waste Separation Systems":"垃圾分类系统","Weathervanes":"风向标","Weed Barrier Fabric":"防草布","Wet-Dry Vacuums":"干湿两用吸尘器","Wheelbarrows":"独轮手推车","Wheelchair & Mobility Scooter Ramps":"轮椅与电动车坡道","Window Awnings & Canopies":"窗户遮阳篷","Wine Bottle Coolers":"红酒冷藏桶","Wine Cabinets":"红酒柜","Wine Making Kits":"酿酒套件","Wine Making Presses":"酿酒压榨机","Wine Racks":"红酒架","Wood Baskets":"柴火篮","Workbenches":"工作台","Yard Signs":"庭院标牌"};
 
 var DATA=null,STARRED={},HIST=[],RETIRED={},SALES_BASE={},SALES_CMP={},actMain='__all__',actSub='__all__';
@@ -1236,17 +1264,29 @@ function openIDB(){
   });
 }
 
-function idbGetAllImgs(){
+function idbGetImg(asin){
+  asin=_normalizeAsinKey(asin);
   return new Promise(function(resolve,reject){
-    if(!_db){resolve({});return;}
+    if(!_db||!asin){resolve(null);return;}
     try{
       var tx=_db.transaction('images','readonly');
-      var req=tx.objectStore('images').getAll();
-      req.onsuccess=function(){
-        var out={};(req.result||[]).forEach(function(rec){out[rec.asin]=rec.data;});
-        resolve(out);
-      };
+      var req=tx.objectStore('images').get(asin);
+      req.onsuccess=function(){resolve(req.result&&req.result.data?req.result.data:null);};
       req.onerror=function(){reject(req.error);};
+    }catch(e){reject(e);}
+  });
+}
+
+function idbPutImg(asin,data){
+  asin=_normalizeAsinKey(asin);
+  return new Promise(function(resolve,reject){
+    if(!_db||!asin||!data){resolve();return;}
+    try{
+      var tx=_db.transaction('images','readwrite');
+      tx.objectStore('images').put({asin:asin,data:data});
+      tx.oncomplete=function(){resolve();};
+      tx.onerror=function(){reject(tx.error);};
+      tx.onabort=function(){reject(tx.error);};
     }catch(e){reject(e);}
   });
 }
@@ -1319,15 +1359,19 @@ function stripInlineImgs(){
   return moved;
 }
 
-// Sync IMGS in-memory object to IDB (debounced full bulk-put)
-// All existing code modifies IMGS[asin]=X normally; we just persist via this.
+// Sync changed images to IDB without clearing and rewriting the whole cache.
 function scheduleImgFlush(){
-  if(!_idbReady||_idbFailed)return;  // localStorage fallback handles persistence
+  if(!_idbReady||_idbFailed)return;
   clearTimeout(_imgFlushTimer);
   _imgFlushTimer=setTimeout(function(){
     if(typeof IMGS==='undefined')return;
-    idbClearImgs().then(function(){return idbBulkPutImgs(IMGS);}).catch(function(e){
+    var keys=Object.keys(_imgDirtySet||{}).filter(function(k){return IMGS[k];});
+    _imgDirtySet={};
+    if(!keys.length)return;
+    var map={};keys.forEach(function(k){map[k]=IMGS[k];});
+    idbBulkPutImgs(map).catch(function(e){
       console.error('[IDB] flush failed:',e);
+      keys.forEach(function(k){_imgDirtySet[k]=1;});
     });
   },800);
 }
@@ -1354,40 +1398,43 @@ function migrateImgsFromLS(){
 // flow in once IDB resolves (same model as the deferred imgs-data script).
 function initIDB(){
   return openIDB().then(function(){
-    return idbGetAllImgs();
-  }).then(function(imgs){
-    var n=Object.keys(imgs).length;
-    if(n===0){
-      // Empty IDB → check if there's a legacy LS dump to migrate
-      return migrateImgsFromLS().then(function(migrated){
-        if(migrated>0){toast('✓ '+migrated+' 张图片已迁移至 IndexedDB');}
-        var stripped=stripInlineImgs();
-        if(stripped>0){save();scheduleImgFlush();toast('✓ 已整理 '+stripped+' 张内嵌图片');}
-        if(typeof _applyImgs==='function')_applyImgs();
-        if(typeof lazyLoadImages==='function')lazyLoadImages();
-      });
-    } else {
-      Object.keys(imgs).forEach(function(k){IMGS[k]=imgs[k];});
-      // Ensure no stale LS copy lingers
-      try{localStorage.removeItem('tz3_imgs');}catch(e){}
-      // One-time strip of inline item.img duplicates → frees localStorage
-      var stripped=stripInlineImgs();
-      if(stripped>0){
-        save();           // re-save trimmed DATA/RETIRED
-        scheduleImgFlush(); // ensure newly-discovered images persist to IDB
-        toast('✓ 已整理 '+stripped+' 张内嵌图片，本地存储已释放');
-      }
-      if(typeof _applyImgs==='function')_applyImgs();
-      if(typeof lazyLoadImages==='function')lazyLoadImages();
+    return migrateImgsFromLS();
+  }).then(function(migrated){
+    if(migrated>0){toast('Images migrated to IndexedDB: '+migrated);}
+    try{localStorage.removeItem('tz3_imgs');}catch(e){}
+    var stripped=stripInlineImgs();
+    if(stripped>0){
+      save();
+      scheduleImgFlush();
+      toast('Inline images cleaned: '+stripped);
     }
+    if(typeof lazyLoadImages==='function')lazyLoadImages();
   }).catch(function(e){
     console.warn('[IDB] unavailable, falling back to localStorage:',e);
     _idbFailed=true;
-    // Fallback: load from LS as the original code did
-    // IMGS loaded async from IDB after init() — see initIDB()
     if(typeof _applyImgs==='function')_applyImgs();
     if(typeof lazyLoadImages==='function')lazyLoadImages();
   });
+}
+
+function ensureImgLoaded(asin,cb){
+  asin=_normalizeAsinKey(asin);
+  if(!asin){if(cb)cb(null);return Promise.resolve(null);}
+  var cached=getImg(asin);
+  if(cached){if(cb)cb(cached);return Promise.resolve(cached);}
+  if(!_idbReady||_idbFailed){if(cb)cb(null);return Promise.resolve(null);}
+  if(_imgLoadingMap[asin])return _imgLoadingMap[asin].then(function(url){if(cb)cb(url);return url;});
+  _imgLoadingMap[asin]=idbGetImg(asin).then(function(url){
+    delete _imgLoadingMap[asin];
+    if(url){
+      IMGS[asin]=url;
+      delete _imgDirtySet[asin];
+      _applyImageToVisibleCards(asin,url);
+    }
+    if(cb)cb(url||null);
+    return url||null;
+  }).catch(function(e){delete _imgLoadingMap[asin];if(cb)cb(null);return null;});
+  return _imgLoadingMap[asin];
 }
 
 var _renderTimer=null,_observer=null,_tipEl=null,_imgTipEl=null,_selCatForSub=null,_selSubForAsins=null,_undoStack=[],_selAsins=new Set();
@@ -3269,6 +3316,8 @@ function getSalesBase(asin){return SALES_BASE[asin]||0;}
 function getSalesCmp(asin){return SALES_CMP[asin]||0;}
 function grandSales(){return totalSales(allItems());}
 function getImg(asin){
+  asin=_normalizeAsinKey(asin);
+  _rememberImgKey(asin);
   var loc=findItem(asin);
   if(loc.cat&&DATA[loc.cat]&&DATA[loc.cat][loc.sub]&&DATA[loc.cat][loc.sub][loc.idx]){
     var it=DATA[loc.cat][loc.sub][loc.idx];
@@ -3285,6 +3334,7 @@ function getImg(asin){
 }
 
 function _applyImageToVisibleCards(asin,url){
+  asin=_normalizeAsinKey(asin);
   if(!asin||!url)return;
   document.querySelectorAll('.p-img[data-asin]').forEach(function(el){
     if((el.getAttribute('data-asin')||'').toUpperCase()===asin){
@@ -3726,6 +3776,15 @@ function initCardDrag(grid){
   });
 }
 
+function _fillImgElement(el,asin){
+  asin=_normalizeAsinKey(asin||el.getAttribute('data-asin'));
+  if(!asin)return;
+  var img=getImg(asin);
+  if(img){el.innerHTML='<img src="'+esc(img)+'" loading="lazy" alt="'+esc(asin)+'">';return;}
+  ensureImgLoaded(asin,function(url){
+    if(url&&document.body.contains(el))el.innerHTML='<img src="'+esc(url)+'" loading="lazy" alt="'+esc(asin)+'">';
+  });
+}
 function setupObserver(){
   if(!('IntersectionObserver' in window)) return;
   _observer = new IntersectionObserver(function(entries) {
@@ -3734,21 +3793,22 @@ function setupObserver(){
         var el = e.target;
         var asin = el.getAttribute('data-asin');
         if(asin) {
-          var img = getImg(asin);
-          if(img) { el.innerHTML = '<img src="' + img + '" loading="lazy" alt="' + asin + '">'; }
+          _fillImgElement(el,asin);
           _observer.unobserve(el);
         }
       }
     });
-  }, {rootMargin: '200px'});
+  }, {rootMargin: '300px'});
 }
 function lazyLoadImages(){
   if(!_observer){
-    document.querySelectorAll('.p-img[data-asin]').forEach(function(el){var img=getImg(el.getAttribute('data-asin'));if(img)el.innerHTML='<img src="'+img+'" loading="lazy" alt="">';});
+    document.querySelectorAll('.p-img[data-asin]').forEach(function(el){_fillImgElement(el,el.getAttribute('data-asin'));});
     return;
   }
   _observer.disconnect();
-  document.querySelectorAll('.p-img[data-asin]').forEach(function(el){_observer.observe(el);});
+  document.querySelectorAll('.p-img[data-asin]').forEach(function(el){
+    if(!el.querySelector('img'))_observer.observe(el);
+  });
 }
 
 function getItems(){
@@ -5601,6 +5661,7 @@ function _applyImgs(){
     window.electronAPI.getSettings().then(function(s){
       var a=document.getElementById('set-autostart');
       var m=document.getElementById('set-min-tray');
+      var lt=document.getElementById('set-light-tray');
       var ne=document.getElementById('set-notify-expiring');
       var nb=document.getElementById('set-notify-backup');
       var acu=document.getElementById('set-auto-check-updates');
@@ -5614,6 +5675,7 @@ function _applyImgs(){
       var rfp=document.getElementById('set-rating-fail-pause');
       if(a)a.checked=!!s.autoStart;
       if(m)m.checked=!!s.minToTray;
+      if(lt)lt.checked=s.lightTrayMode!==false;
       if(ne)ne.checked=!!s.notifyExpiring;
       if(nb)nb.checked=!!s.notifyBackup;
       if(acu)acu.checked=s.autoCheckUpdates!==false;
@@ -5689,6 +5751,7 @@ function _applyImgs(){
     var updates={
       autoStart:document.getElementById('set-autostart').checked,
       minToTray:document.getElementById('set-min-tray').checked,
+      lightTrayMode:document.getElementById('set-light-tray')?document.getElementById('set-light-tray').checked:true,
       notifyExpiring:document.getElementById('set-notify-expiring').checked,
       notifyBackup:document.getElementById('set-notify-backup').checked,
       autoCheckUpdates:document.getElementById('set-auto-check-updates')?document.getElementById('set-auto-check-updates').checked:true,
@@ -8237,8 +8300,8 @@ setTimeout(function(){
 
 </script>
 <script defer id="imgs-data">
-var IMGS = {};
-if(typeof _applyImgs==="function")_applyImgs();
+if(typeof IMGS==="undefined")var IMGS=_makeImgStore({});
+if(typeof lazyLoadImages==="function")lazyLoadImages();
 </script>
 </body>
 </html>

@@ -530,6 +530,7 @@ const DEFAULT_SETTINGS = {
   externalBrowser: 'system',
   externalBrowserPath: '',
   minToTray: true,
+  lightTrayMode: true,
   autoRating: false,
   ratingScope: 'all',
   ratingOrder: 'oldest',
@@ -627,6 +628,7 @@ function normalizeSettings(cfg = {}) {
     externalBrowser: normalizeExternalBrowser(cfg.externalBrowser),
     externalBrowserPath: typeof cfg.externalBrowserPath === 'string' ? cfg.externalBrowserPath : '',
     minToTray: cfg.minToTray === undefined ? DEFAULT_SETTINGS.minToTray : !!cfg.minToTray,
+    lightTrayMode: cfg.lightTrayMode === undefined ? DEFAULT_SETTINGS.lightTrayMode : !!cfg.lightTrayMode,
     autoRating: cfg.autoRating === undefined ? DEFAULT_SETTINGS.autoRating : !!cfg.autoRating,
     ratingScope: typeof cfg.ratingScope === 'string' && cfg.ratingScope ? cfg.ratingScope : DEFAULT_SETTINGS.ratingScope,
     ratingOrder: typeof cfg.ratingOrder === 'string' && cfg.ratingOrder ? cfg.ratingOrder : DEFAULT_SETTINGS.ratingOrder,
@@ -703,8 +705,13 @@ function createWindow(showImmediately = true) {
   mainWindow.on('close', (e) => {
     if (!isQuitting && getSettings().minToTray) {
       e.preventDefault();
-      mainWindow.hide();
       const s = getSettings();
+      if (s.lightTrayMode) {
+        const win = mainWindow;
+        if (win && !win.isDestroyed()) win.destroy();
+      } else {
+        mainWindow.hide();
+      }
       if (!s.closeToTrayShown) {
         saveSettings({ closeToTrayShown: true });
         if (Notification.isSupported()) {
@@ -742,6 +749,17 @@ function showMainWindow() {
     if (mainWindow.isMinimized()) mainWindow.restore();
     mainWindow.show(); mainWindow.focus();
   }
+  return mainWindow;
+}
+
+function runInMainWindow(script) {
+  const win = showMainWindow();
+  if (!win || win.isDestroyed()) return;
+  const run = () => {
+    if (!win.isDestroyed()) win.webContents.executeJavaScript(script).catch(() => {});
+  };
+  if (win.webContents.isLoading()) win.webContents.once('did-finish-load', () => setTimeout(run, 50));
+  else run();
 }
 
 // ── 系统托盘 ─────────────────────────────────────────────────
